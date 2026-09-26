@@ -42,6 +42,11 @@ use boltffi::*;
         python,
         reason = ExclusionReason::CoverageGap,
         details = "The Python demo suite does not assert exported constants yet. Add the marker when Python constant coverage lands."
+    ),
+    exclude(
+        ruby,
+        reason = ExclusionReason::ImplementationGap,
+        details = "the Ruby target does not support enums yet"
     )
 )]
 #[export]
@@ -86,6 +91,11 @@ pub enum DemoMode {
         dart,
         reason = ExclusionReason::ImplementationGap,
         details = "The native Dart target doesn't emit an associated constant whose value is an enum-variant reference (DemoMode::PREFERRED, DemoState::INITIAL) at all -- only DemoMode::FALLBACK (accessor-backed) and DemoMode::VARIANT_COUNT (inline primitive) appear on the generated types, so this case can't be asserted as a whole."
+    ),
+    exclude(
+        ruby,
+        reason = ExclusionReason::ImplementationGap,
+        details = "the Ruby target does not support constants yet"
     )
 )]
 #[data(impl)]

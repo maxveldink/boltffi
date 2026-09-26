@@ -238,7 +238,12 @@ pub fn sum_f64_vec(values: Vec<f64>) -> f64 {
 #[demo_bench_macros::demo_case(
     "primitives.vecs.u64.should_increment_first_value_in_place",
     justification = "Ensure a mutable u64 slice crosses the wire and increments its first value in place.",
-    directions = "Call `primitives::vecs::inc_u64` through the generated binding and assert a mutable u64 slice crosses the wire and increments its first value in place."
+    directions = "Call `primitives::vecs::inc_u64` through the generated binding and assert a mutable u64 slice crosses the wire and increments its first value in place.",
+    exclude(
+        ruby,
+        reason = ExclusionReason::ImplementationGap,
+        details = "the Ruby target does not support mutable borrowed parameters yet"
+    )
 )]
 #[export]
 pub fn inc_u64(values: &mut [u64]) {

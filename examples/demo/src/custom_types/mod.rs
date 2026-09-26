@@ -51,7 +51,12 @@ custom_type!(
 #[demo_bench_macros::demo_case(
     "custom_types.event.should_expose_datetime_field",
     justification = "Ensure the generated Event record exposes a custom DateTime field through the host-language surface.",
-    directions = "Inspect or construct `custom_types::Event` through the generated binding and assert the generated Event record exposes a custom DateTime field through the host-language surface."
+    directions = "Inspect or construct `custom_types::Event` through the generated binding and assert the generated Event record exposes a custom DateTime field through the host-language surface.",
+    exclude(
+        ruby,
+        reason = ExclusionReason::ImplementationGap,
+        details = "the Ruby target does not support custom types yet"
+    )
 )]
 #[data]
 pub struct Event {
@@ -62,7 +67,12 @@ pub struct Event {
 #[demo_bench_macros::demo_case(
     "custom_types.email.should_roundtrip_value",
     justification = "Ensure an email custom type crosses the wire through its string representation and returns unchanged.",
-    directions = "Call `custom_types::echo_email` through the generated binding and assert an email custom type crosses the wire through its string representation and returns unchanged."
+    directions = "Call `custom_types::echo_email` through the generated binding and assert an email custom type crosses the wire through its string representation and returns unchanged.",
+    exclude(
+        ruby,
+        reason = ExclusionReason::ImplementationGap,
+        details = "the Ruby target does not support custom types yet"
+    )
 )]
 #[export]
 pub fn echo_email(email: Email) -> Email {
@@ -72,7 +82,12 @@ pub fn echo_email(email: Email) -> Email {
 #[demo_bench_macros::demo_case(
     "custom_types.email.should_extract_domain",
     justification = "Ensure an email custom type crosses the wire and returns its domain string.",
-    directions = "Call `custom_types::email_domain` through the generated binding and assert an email custom type crosses the wire and returns its domain string."
+    directions = "Call `custom_types::email_domain` through the generated binding and assert an email custom type crosses the wire and returns its domain string.",
+    exclude(
+        ruby,
+        reason = ExclusionReason::ImplementationGap,
+        details = "the Ruby target does not support custom types yet"
+    )
 )]
 #[export]
 pub fn email_domain(email: Email) -> String {
@@ -82,7 +97,12 @@ pub fn email_domain(email: Email) -> String {
 #[demo_bench_macros::demo_case(
     "custom_types.datetime.should_roundtrip_millis",
     justification = "Ensure a DateTime custom type crosses the wire through millisecond representation and returns unchanged.",
-    directions = "Call `custom_types::echo_datetime` through the generated binding and assert a DateTime custom type crosses the wire through millisecond representation and returns unchanged."
+    directions = "Call `custom_types::echo_datetime` through the generated binding and assert a DateTime custom type crosses the wire through millisecond representation and returns unchanged.",
+    exclude(
+        ruby,
+        reason = ExclusionReason::ImplementationGap,
+        details = "the Ruby target does not support custom types yet"
+    )
 )]
 #[export]
 pub fn echo_datetime(dt: DateTime<Utc>) -> DateTime<Utc> {
@@ -92,7 +112,12 @@ pub fn echo_datetime(dt: DateTime<Utc>) -> DateTime<Utc> {
 #[demo_bench_macros::demo_case(
     "custom_types.datetime.should_convert_to_millis",
     justification = "Ensure a DateTime custom type crosses the wire and returns its millisecond representation.",
-    directions = "Call `custom_types::datetime_to_millis` through the generated binding and assert a DateTime custom type crosses the wire and returns its millisecond representation."
+    directions = "Call `custom_types::datetime_to_millis` through the generated binding and assert a DateTime custom type crosses the wire and returns its millisecond representation.",
+    exclude(
+        ruby,
+        reason = ExclusionReason::ImplementationGap,
+        details = "the Ruby target does not support custom types yet"
+    )
 )]
 #[export]
 pub fn datetime_to_millis(dt: DateTime<Utc>) -> i64 {
@@ -102,7 +127,12 @@ pub fn datetime_to_millis(dt: DateTime<Utc>) -> i64 {
 #[demo_bench_macros::demo_case(
     "custom_types.datetime.should_format_rfc3339_timestamp",
     justification = "Ensure a DateTime custom type crosses the wire and returns an RFC3339 timestamp string.",
-    directions = "Call `custom_types::format_timestamp` through the generated binding and assert a DateTime custom type crosses the wire and returns an RFC3339 timestamp string."
+    directions = "Call `custom_types::format_timestamp` through the generated binding and assert a DateTime custom type crosses the wire and returns an RFC3339 timestamp string.",
+    exclude(
+        ruby,
+        reason = ExclusionReason::ImplementationGap,
+        details = "the Ruby target does not support custom types yet"
+    )
 )]
 #[export]
 pub fn format_timestamp(timestamp: DateTime<Utc>) -> String {
@@ -112,7 +142,12 @@ pub fn format_timestamp(timestamp: DateTime<Utc>) -> String {
 #[demo_bench_macros::demo_case(
     "custom_types.event.should_roundtrip_datetime_field",
     justification = "Ensure an Event record containing a DateTime custom type field crosses the FFI boundary unchanged.",
-    directions = "Call `custom_types::echo_event` through the generated binding and assert an Event record containing a DateTime custom type field crosses the FFI boundary unchanged."
+    directions = "Call `custom_types::echo_event` through the generated binding and assert an Event record containing a DateTime custom type field crosses the FFI boundary unchanged.",
+    exclude(
+        ruby,
+        reason = ExclusionReason::ImplementationGap,
+        details = "the Ruby target does not support custom types yet"
+    )
 )]
 #[export]
 pub fn echo_event(event: Event) -> Event {
@@ -122,7 +157,12 @@ pub fn echo_event(event: Event) -> Event {
 #[demo_bench_macros::demo_case(
     "custom_types.event.should_extract_timestamp_millis",
     justification = "Ensure an Event record containing a DateTime custom type field returns its timestamp as milliseconds.",
-    directions = "Call `custom_types::event_timestamp` through the generated binding and assert an Event record containing a DateTime custom type field returns its timestamp as milliseconds."
+    directions = "Call `custom_types::event_timestamp` through the generated binding and assert an Event record containing a DateTime custom type field returns its timestamp as milliseconds.",
+    exclude(
+        ruby,
+        reason = ExclusionReason::ImplementationGap,
+        details = "the Ruby target does not support custom types yet"
+    )
 )]
 #[export]
 pub fn event_timestamp(event: Event) -> i64 {
@@ -132,7 +172,12 @@ pub fn event_timestamp(event: Event) -> i64 {
 #[demo_bench_macros::demo_case(
     "custom_types.vectors.emails.should_roundtrip_values",
     justification = "Ensure a vector of Email custom types preserves order and UTF-8 values when round-tripped.",
-    directions = "Call `custom_types::echo_emails` through the generated binding and assert a vector of Email custom types preserves order and UTF-8 values when round-tripped."
+    directions = "Call `custom_types::echo_emails` through the generated binding and assert a vector of Email custom types preserves order and UTF-8 values when round-tripped.",
+    exclude(
+        ruby,
+        reason = ExclusionReason::ImplementationGap,
+        details = "the Ruby target does not support custom types yet"
+    )
 )]
 #[export]
 pub fn echo_emails(emails: Vec<Email>) -> Vec<Email> {
@@ -142,7 +187,12 @@ pub fn echo_emails(emails: Vec<Email>) -> Vec<Email> {
 #[demo_bench_macros::demo_case(
     "custom_types.vectors.datetimes.should_roundtrip_millis_values",
     justification = "Ensure a vector of DateTime custom types preserves millisecond values when round-tripped.",
-    directions = "Call `custom_types::echo_datetimes` through the generated binding and assert a vector of DateTime custom types preserves millisecond values when round-tripped."
+    directions = "Call `custom_types::echo_datetimes` through the generated binding and assert a vector of DateTime custom types preserves millisecond values when round-tripped.",
+    exclude(
+        ruby,
+        reason = ExclusionReason::ImplementationGap,
+        details = "the Ruby target does not support custom types yet"
+    )
 )]
 #[export]
 pub fn echo_datetimes(dts: Vec<DateTime<Utc>>) -> Vec<DateTime<Utc>> {

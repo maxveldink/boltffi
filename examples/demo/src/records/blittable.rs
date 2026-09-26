@@ -19,7 +19,12 @@ impl Point {
     #[demo_bench_macros::demo_case(
         "records.blittable.point.should_construct_with_static_new",
         justification = "Ensure Point::new returns a blittable Point containing the provided coordinates.",
-        directions = "Call `records::blittable::Point::new` through the generated binding and assert Point::new returns a blittable Point containing the provided coordinates."
+        directions = "Call `records::blittable::Point::new` through the generated binding and assert Point::new returns a blittable Point containing the provided coordinates.",
+        exclude(
+            ruby,
+            reason = ExclusionReason::ImplementationGap,
+            details = "the Ruby target does not bind record methods or initializers yet"
+        )
     )]
     pub fn new(x: f64, y: f64) -> Self {
         Point { x, y }
@@ -28,7 +33,12 @@ impl Point {
     #[demo_bench_macros::demo_case(
         "records.blittable.point.should_return_origin",
         justification = "Ensure Point::origin returns a Point at zero coordinates.",
-        directions = "Call `records::blittable::Point::origin` through the generated binding and assert Point::origin returns a Point at zero coordinates."
+        directions = "Call `records::blittable::Point::origin` through the generated binding and assert Point::origin returns a Point at zero coordinates.",
+        exclude(
+            ruby,
+            reason = ExclusionReason::ImplementationGap,
+            details = "the Ruby target does not bind record methods or initializers yet"
+        )
     )]
     pub fn origin() -> Self {
         Point { x: 0.0, y: 0.0 }
@@ -37,7 +47,12 @@ impl Point {
     #[demo_bench_macros::demo_case(
         "records.blittable.point.should_construct_from_polar_coordinates",
         justification = "Ensure Point::from_polar converts polar coordinates into Cartesian point fields.",
-        directions = "Call `records::blittable::Point::from_polar` through the generated binding and assert Point::from_polar converts polar coordinates into Cartesian point fields."
+        directions = "Call `records::blittable::Point::from_polar` through the generated binding and assert Point::from_polar converts polar coordinates into Cartesian point fields.",
+        exclude(
+            ruby,
+            reason = ExclusionReason::ImplementationGap,
+            details = "the Ruby target does not bind record methods or initializers yet"
+        )
     )]
     pub fn from_polar(r: f64, theta: f64) -> Self {
         Point {
@@ -49,12 +64,22 @@ impl Point {
     #[demo_bench_macros::demo_case(
         "records.blittable.point.should_normalize_unit_vector",
         justification = "Ensure Point::try_unit returns a normalized Point for non-zero coordinates.",
-        directions = "Call `records::blittable::Point::try_unit` through the generated binding and assert Point::try_unit returns a normalized Point for non-zero coordinates."
+        directions = "Call `records::blittable::Point::try_unit` through the generated binding and assert Point::try_unit returns a normalized Point for non-zero coordinates.",
+        exclude(
+            ruby,
+            reason = ExclusionReason::ImplementationGap,
+            details = "the Ruby target does not bind record methods or initializers yet"
+        )
     )]
     #[demo_bench_macros::demo_case(
         "records.blittable.point.should_reject_zero_unit_vector",
         justification = "Ensure Point::try_unit rejects zero coordinates instead of returning an invalid unit vector.",
-        directions = "Call `records::blittable::Point::try_unit` through the generated binding and assert Point::try_unit rejects zero coordinates instead of returning an invalid unit vector."
+        directions = "Call `records::blittable::Point::try_unit` through the generated binding and assert Point::try_unit rejects zero coordinates instead of returning an invalid unit vector.",
+        exclude(
+            ruby,
+            reason = ExclusionReason::ImplementationGap,
+            details = "the Ruby target does not bind record methods or initializers yet"
+        )
     )]
     pub fn try_unit(x: f64, y: f64) -> Result<Self, String> {
         let len = (x * x + y * y).sqrt();
@@ -71,12 +96,22 @@ impl Point {
     #[demo_bench_macros::demo_case(
         "records.blittable.point.should_return_some_for_checked_unit",
         justification = "Ensure Point::checked_unit returns Some normalized Point for non-zero coordinates.",
-        directions = "Call `records::blittable::Point::checked_unit` through the generated binding and assert Point::checked_unit returns Some normalized Point for non-zero coordinates."
+        directions = "Call `records::blittable::Point::checked_unit` through the generated binding and assert Point::checked_unit returns Some normalized Point for non-zero coordinates.",
+        exclude(
+            ruby,
+            reason = ExclusionReason::ImplementationGap,
+            details = "the Ruby target does not bind record methods or initializers yet"
+        )
     )]
     #[demo_bench_macros::demo_case(
         "records.blittable.point.should_return_none_for_zero_checked_unit",
         justification = "Ensure Point::checked_unit returns None for zero coordinates.",
-        directions = "Call `records::blittable::Point::checked_unit` through the generated binding and assert Point::checked_unit returns None for zero coordinates."
+        directions = "Call `records::blittable::Point::checked_unit` through the generated binding and assert Point::checked_unit returns None for zero coordinates.",
+        exclude(
+            ruby,
+            reason = ExclusionReason::ImplementationGap,
+            details = "the Ruby target does not bind record methods or initializers yet"
+        )
     )]
     pub fn checked_unit(x: f64, y: f64) -> Option<Self> {
         let len = (x * x + y * y).sqrt();
@@ -93,7 +128,12 @@ impl Point {
     #[demo_bench_macros::demo_case(
         "records.blittable.point.should_compute_distance",
         justification = "Ensure Point::distance computes the Euclidean distance from the origin.",
-        directions = "Call `records::blittable::Point::distance` through the generated binding and assert Point::distance computes the Euclidean distance from the origin."
+        directions = "Call `records::blittable::Point::distance` through the generated binding and assert Point::distance computes the Euclidean distance from the origin.",
+        exclude(
+            ruby,
+            reason = ExclusionReason::ImplementationGap,
+            details = "the Ruby target does not bind record methods or initializers yet"
+        )
     )]
     pub fn distance(&self) -> f64 {
         (self.x * self.x + self.y * self.y).sqrt()
@@ -102,7 +142,12 @@ impl Point {
     #[demo_bench_macros::demo_case(
         "records.blittable.point.should_scale_coordinates",
         justification = "Ensure Point::scale multiplies both coordinates by the provided factor.",
-        directions = "Call `records::blittable::Point::scale` through the generated binding and assert Point::scale multiplies both coordinates by the provided factor."
+        directions = "Call `records::blittable::Point::scale` through the generated binding and assert Point::scale multiplies both coordinates by the provided factor.",
+        exclude(
+            ruby,
+            reason = ExclusionReason::ImplementationGap,
+            details = "the Ruby target does not bind record methods or initializers yet"
+        )
     )]
     pub fn scale(&mut self, factor: f64) {
         self.x *= factor;
@@ -112,7 +157,12 @@ impl Point {
     #[demo_bench_macros::demo_case(
         "records.blittable.point.should_add_coordinates",
         justification = "Ensure Point::add returns a Point whose coordinates are the pairwise sums.",
-        directions = "Call `records::blittable::Point::add` through the generated binding and assert Point::add returns a Point whose coordinates are the pairwise sums."
+        directions = "Call `records::blittable::Point::add` through the generated binding and assert Point::add returns a Point whose coordinates are the pairwise sums.",
+        exclude(
+            ruby,
+            reason = ExclusionReason::ImplementationGap,
+            details = "the Ruby target does not bind record methods or initializers yet"
+        )
     )]
     pub fn add(&self, other: Point) -> Point {
         Point {
@@ -124,7 +174,12 @@ impl Point {
     #[demo_bench_macros::demo_case(
         "records.blittable.point.should_compute_path_length",
         justification = "Ensure Point::path_length sums the segment lengths across a vector of Points.",
-        directions = "Call `records::blittable::Point::path_length` through the generated binding and assert Point::path_length sums the segment lengths across a vector of Points."
+        directions = "Call `records::blittable::Point::path_length` through the generated binding and assert Point::path_length sums the segment lengths across a vector of Points.",
+        exclude(
+            ruby,
+            reason = ExclusionReason::ImplementationGap,
+            details = "the Ruby target does not bind record methods or initializers yet"
+        )
     )]
     pub fn path_length(points: Vec<Point>) -> f64 {
         points
@@ -140,7 +195,12 @@ impl Point {
     #[demo_bench_macros::demo_case(
         "records.blittable.point.should_report_dimension_count",
         justification = "Ensure Point::dimensions reports the fixed two-dimensional shape of Point.",
-        directions = "Call `records::blittable::Point::dimensions` through the generated binding and assert Point::dimensions reports the fixed two-dimensional shape of Point."
+        directions = "Call `records::blittable::Point::dimensions` through the generated binding and assert Point::dimensions reports the fixed two-dimensional shape of Point.",
+        exclude(
+            ruby,
+            reason = ExclusionReason::ImplementationGap,
+            details = "the Ruby target does not bind record methods or initializers yet"
+        )
     )]
     pub fn dimensions() -> u32 {
         2

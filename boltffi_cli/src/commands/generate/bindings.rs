@@ -11,6 +11,7 @@ use boltffi_backend::target::kotlin::{
     KotlinApiStyle as BackendKotlinApiStyle, KotlinDesktopLoader as BackendKotlinDesktopLoader,
     KotlinFactoryStyle as BackendKotlinFactoryStyle,
 };
+use boltffi_backend::target::ruby::RubyHost;
 use boltffi_backend::{CoverageMode, GeneratedOutput};
 use boltffi_bindgen::generate::{Generation, GenerationError};
 use boltffi_bindgen::target::Target;
@@ -93,6 +94,7 @@ pub fn run_generation(config: &Config, options: &GenerateOptions) -> Result<()> 
         GenerateTarget::CSharp => generate_csharp(config, options),
         GenerateTarget::Header => generate_header(config, options),
         GenerateTarget::C => generate_c(config, options),
+        GenerateTarget::Ruby => generate_ruby(config, options),
         other => Err(CliError::CommandFailed {
             command: format!("cannot directly generate {}", target_label(other)),
             status: None,
@@ -499,6 +501,72 @@ fn generate_c(config: &Config, options: &GenerateOptions) -> Result<()> {
         })
 }
 
+fn generate_ruby(config: &Config, options: &GenerateOptions) -> Result<()> {
+    let target = Target::Ruby;
+    if !config.is_ruby_enabled() {
+        return Err(CliError::CommandFailed {
+            command: "targets.ruby.enabled = false".to_string(),
+            status: None,
+        });
+    }
+
+    if !config.should_process(target, options.experimental) {
+        return Err(CliError::CommandFailed {
+            command: format!(
+                "{} is experimental, use --experimental flag or add \"{}\" to [experimental]",
+                target.name(),
+                target.name()
+            ),
+            status: None,
+        });
+    }
+
+    let expansion = BindingExpansion::resolve_for_commands(
+        config,
+        &["build", "generate"],
+        &options.cargo_args,
+    )?;
+    let output_directory = options
+        .output
+        .clone()
+        .unwrap_or_else(|| config.ruby_output());
+
+    expansion
+        .generation()
+        .coverage_mode(CoverageMode::Partial)
+        .ruby_host(ruby_host(config, expansion.artifact_name())?)
+        .render(target)
+        .map_err(|error| generation_error(target.name(), error))
+        .and_then(|output| {
+            print_coverage(target.name(), &output, options.deny_skipped)?;
+            Generation::write_output(output, &output_directory)
+                .map(drop)
+                .map_err(|error| generation_error(target.name(), error))
+        })
+}
+
+/// Builds the Ruby host from `[targets.ruby]` and the Rust library artifact.
+pub(crate) fn ruby_host(config: &Config, artifact_name: &str) -> Result<RubyHost> {
+    let ruby = &config.targets.ruby;
+    let host = RubyHost::new()
+        .native_library(artifact_name)
+        .version(ruby.version.clone());
+    let host = match &ruby.module_name {
+        Some(module) => host.module_name(module).map_err(|error| {
+            generation_error(Target::Ruby.name(), GenerationError::Render(error))
+        })?,
+        None => host,
+    };
+    let host = match &ruby.gem_name {
+        Some(gem) => host.gem_name(gem.clone()),
+        None => host,
+    };
+    Ok(match &ruby.cargo_manifest {
+        Some(manifest) => host.cargo_manifest(manifest.clone()),
+        None => host,
+    })
+}
+
 fn generate_kotlin(config: &Config, options: &GenerateOptions) -> Result<()> {
     let target = Target::Kotlin;
     let target_name = target.name();
@@ -898,6 +966,7 @@ fn target_label(target: &GenerateTarget) -> &'static str {
         GenerateTarget::Python => "python",
         GenerateTarget::CSharp => "csharp",
         GenerateTarget::C => "c",
+        GenerateTarget::Ruby => "ruby",
         GenerateTarget::All => "all",
     }
 }
