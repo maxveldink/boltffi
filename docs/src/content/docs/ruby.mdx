@@ -1,0 +1,68 @@
+---
+title: "Ruby"
+description: "Call a Rust library from Ruby through a generated C extension, with plain Ruby values at the boundary."
+---
+
+# Ruby
+
+The Ruby target generates a C extension gem. The extension links the Rust static library and calls it directly, so a Rust function is an ordinary Ruby module function. Build the gem with [Packaging](/docs/packaging#ruby-experimental) and choose its names in [Configuration](/docs/configuration#ruby-configuration).
+
+Ruby is experimental. It supports synchronous free functions and records; the remaining gaps are listed under [Experimental features](/docs/experimental#ruby).
+
+## Call a Rust function
+
+With the `distance` function from Getting Started and a package named `mylib`:
+
+```ruby
+require "mylib"
+
+start = Mylib::Point.new(x: 0.0, y: 0.0)
+finish = Mylib::Point.new(x: 3.0, y: 4.0)
+Mylib.distance(start, finish) # => 5.0
+```
+
+Each function is a module function with a fixed arity, so Ruby and YJIT call the C function directly.
+
+## Type mapping
+
+Every value becomes a plain Ruby object when it crosses the boundary. The extension builds each object in full before the call returns; nothing refers back to Rust memory.
+
+| Rust | Ruby |
+|------|------|
+| `bool` | `true` or `false` |
+| `i8` to `i64`, `u8` to `u64`, `isize`, `usize` | `Integer` |
+| `f32`, `f64` | `Float` |
+| `String`, `&str` | `String` in UTF-8 |
+| `Vec<u8>` | `String` in ASCII-8BIT |
+| `Vec<T>`, tuples | `Array` |
+| `HashMap<K, V>`, `BTreeMap<K, V>` | `Hash` |
+| `Option<T>` | `nil` or the value |
+| `#[data]` struct | frozen `Data` instance |
+| `()` | `nil` |
+
+Arguments are checked before Rust runs:
+
+- An integer argument must be an `Integer` in the range of the Rust type. `1.5` raises `TypeError` and `-1` for a `u32` raises `RangeError`.
+- A float argument accepts `Float` and `Integer`.
+- A `bool` argument accepts only `true` and `false`.
+- A string argument must be valid UTF-8. An ASCII-only string in another ASCII-compatible encoding passes. Other strings raise `ArgumentError` or `Encoding::CompatibilityError`; transcode them with `String#encode` first.
+- A record argument must be an instance of its `Data` class.
+
+## Records
+
+Each `#[data]` struct becomes a `Data` class under the module, with one member per field:
+
+```ruby
+point = Mylib::Point.new(x: 1.0, y: 2.0)
+point.x        # => 1.0
+point.frozen?  # => true
+point.to_h     # => {x: 1.0, y: 2.0}
+```
+
+A field whose name is also a method of every Ruby object, such as `hash` or `class`, gets a trailing underscore: `record.hash_`. A function whose name is also a method of every Ruby module, such as `name`, gets one too: `Mylib.name_`.
+
+## Runtime behavior
+
+- Calls hold the global VM lock. A long Rust computation blocks other Ruby threads for its duration.
+- A Rust panic aborts the process. BoltFFI exports are `extern "C"` functions, which cannot unwind into Ruby. Keep exported functions panic-free.
+- The compiled extension is specific to the Ruby version it was built for. A precompiled gem needs one build per Ruby minor version.

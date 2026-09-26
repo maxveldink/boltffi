@@ -906,6 +906,60 @@ boltffi generate c --experimental --deny-skipped
 
 This writes `dist/c/boltffi.h` without packaging native libraries. `pack c` copies the public header to `dist/c/include/mylib.h` and builds the matching libraries.
 
+## Ruby (experimental)
+
+Enable the [Ruby target](/docs/configuration#ruby-configuration), then write the gem sources and the host static library:
+
+```bash
+boltffi pack ruby --experimental --release --deny-skipped
+```
+
+The Rust library must declare the `staticlib` crate type:
+
+```toml
+[lib]
+crate-type = ["staticlib", "rlib"]
+```
+
+### Output structure
+
+With the package named `mylib` and output directory `dist/ruby`, the gem sources are:
+
+```text
+dist/ruby/
+├── mylib.gemspec
+├── lib/mylib.rb
+└── ext/mylib/
+    ├── extconf.rb
+    ├── mylib.c
+    ├── boltffi.h
+    ├── boltffi_ruby.h
+    ├── libmylib.a
+    └── libmylib.a.boltffi-link.json
+```
+
+Build and install the gem with RubyGems. The install compiles the extension and links `libmylib.a`, so it does not need cargo:
+
+```bash
+cd dist/ruby
+gem build mylib.gemspec
+gem install --local mylib-*.gem
+```
+
+The static library matches the machine that ran `pack ruby`, so this gem installs on that platform only. The compiled extension matches one Ruby version. A gem for several Ruby versions needs one build per Ruby minor version.
+
+### Building from source
+
+`extconf.rb` looks for the static library in this order: the `BOLTFFI_RUBY_STATIC_LIBRARY` path, then `lib<library>.a` beside it, then a cargo build of the crate at `BOLTFFI_RUBY_CARGO_MANIFEST` or at [`cargo_manifest`](/docs/configuration#ruby-configuration). The cargo build uses the same binding expansion as `pack ruby`, so a source gem that ships the crate compiles with only Rust and a C compiler.
+
+### Source-only generation
+
+```bash
+boltffi generate ruby --experimental --deny-skipped
+```
+
+This writes the gem sources without the static library.
+
 ## Build Profiles
 
 Debug builds are faster but produce larger, slower binaries:
