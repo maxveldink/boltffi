@@ -1,25 +1,40 @@
 //! The extension source file: forward declarations, definitions, and `Init_`.
 
-use std::collections::BTreeSet;
-
 use askama::Template;
 use boltffi_binding::{DeclarationRef, Native};
 
-use crate::core::{AuxChunk, Error, RenderedDeclaration, Result};
-use crate::target::ruby::syntax::{Constant, ConstantPath};
+use crate::{
+    bridge::c::{Identifier, Literal},
+    core::{AuxChunk, Error, RenderedDeclaration, Result},
+    target::ruby::{name_style::NameScope, syntax::ConstantPath},
+};
 
 use super::{function, record};
 
 #[derive(Template)]
 #[template(path = "target/ruby/extension.c", escape = "none")]
-struct ExtensionTemplate<'extension> {
-    stem: &'extension str,
-    outer: &'extension Constant,
-    nested: &'extension [Constant],
+struct ExtensionTemplate {
+    init: Identifier,
+    outer: Literal,
+    nested: Vec<Literal>,
     forward_declarations: Vec<String>,
     definitions: Vec<String>,
-    records: Vec<record::Registration>,
-    functions: Vec<function::Registration>,
+    records: Vec<RecordClass>,
+    functions: Vec<ModuleFunction>,
+}
+
+/// One `Data` class that `Init_` defines.
+struct RecordClass {
+    class: Identifier,
+    constant: Literal,
+    members: Vec<Literal>,
+}
+
+/// One module function that `Init_` defines.
+struct ModuleFunction {
+    name: Literal,
+    wrapper: Identifier,
+    arity: i32,
 }
 
 /// Renders the C source of the extension.
@@ -34,6 +49,8 @@ pub fn render(
         .ok_or(Error::InvalidRubyIdentifier {
             identifier: module.to_string(),
         })?;
+    let mut constants = NameScope::new(format!("module `{module}` constants"));
+    let mut methods = NameScope::new(format!("module `{module}` functions"));
     let mut forward_declarations = Vec::new();
     let mut definitions = Vec::new();
     let mut records = Vec::new();
@@ -41,10 +58,26 @@ pub fn render(
     for rendered in declarations {
         match rendered.declaration() {
             DeclarationRef::Record(declaration) => {
-                records.push(record::Registration::from_declaration(declaration)?);
+                let registration = record::Registration::from_declaration(declaration)?;
+                constants.claim(registration.constant.as_str(), registration.subject)?;
+                records.push(RecordClass {
+                    class: registration.class,
+                    constant: Literal::string(registration.constant.as_str()),
+                    members: registration
+                        .members
+                        .iter()
+                        .map(|member| Literal::string(member.as_str()))
+                        .collect(),
+                });
             }
             DeclarationRef::Function(declaration) => {
-                functions.push(function::Registration::from_declaration(declaration)?);
+                let registration = function::Registration::from_declaration(declaration)?;
+                methods.claim(registration.ruby_name.as_str(), registration.subject)?;
+                functions.push(ModuleFunction {
+                    name: Literal::string(registration.ruby_name.as_str()),
+                    wrapper: registration.wrapper,
+                    arity: registration.arity,
+                });
             }
             _ => {}
         }
@@ -57,20 +90,13 @@ pub fn render(
             definitions.push(primary.into_string());
         }
     }
-    unique_names(
-        module,
-        "record constants",
-        records.iter().map(|record| record.constant.as_str()),
-    )?;
-    unique_names(
-        module,
-        "module functions",
-        functions.iter().map(|function| function.ruby_name.as_str()),
-    )?;
     let source = ExtensionTemplate {
-        stem,
-        outer,
-        nested,
+        init: Identifier::parse(format!("Init_{stem}"))?,
+        outer: Literal::string(outer.as_str()),
+        nested: nested
+            .iter()
+            .map(|constant| Literal::string(constant.as_str()))
+            .collect(),
         forward_declarations,
         definitions,
         records,
@@ -78,24 +104,6 @@ pub fn render(
     }
     .render()?;
     Ok(indent(&source))
-}
-
-fn unique_names<'name>(
-    module: &ConstantPath,
-    kind: &str,
-    names: impl IntoIterator<Item = &'name str>,
-) -> Result<()> {
-    let mut seen = BTreeSet::new();
-    names.into_iter().try_for_each(|name| {
-        if seen.insert(name) {
-            Ok(())
-        } else {
-            Err(Error::RubyNameCollision {
-                scope: format!("{module} {kind}"),
-                name: name.to_owned(),
-            })
-        }
-    })
 }
 
 /// Re-indents the generated C by brace depth.

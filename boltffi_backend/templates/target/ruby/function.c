@@ -10,7 +10,7 @@ static VALUE {{ decoder.name }}(boltffi_ruby_reader *reader) {
 }
 
 {% endif -%}
-static VALUE {{ function.wrapper }}({{ function.signature() }}) {
+static VALUE {{ function.wrapper }}({% if function.variadic() %}int argc, VALUE *argv, VALUE self{% else %}VALUE self{% for index in 0..function.arity %}, VALUE boltffi_arg_{{ index }}{% endfor %}{% endif %}) {
 {%- if function.variadic() %}
     rb_check_arity(argc, {{ function.arity }}, {{ function.arity }});
 {%- endif %}

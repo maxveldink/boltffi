@@ -25,6 +25,7 @@ struct ExtconfTemplate<'package> {
     extension: Literal,
     artifact: Literal,
     manifest: Option<Literal>,
+    features: Literal,
 }
 
 #[derive(Template)]
@@ -44,6 +45,7 @@ pub struct Package<'package> {
     pub module: &'package ConstantPath,
     pub artifact: &'package str,
     pub cargo_manifest: Option<&'package str>,
+    pub cargo_features: &'package str,
     pub crate_name: &'package str,
 }
 
@@ -71,6 +73,7 @@ impl Package<'_> {
                     extension: Literal::string(self.stem),
                     artifact: Literal::string(self.artifact),
                     manifest: self.cargo_manifest.map(Literal::string),
+                    features: Literal::string(self.cargo_features),
                 }
                 .render()?,
             ),

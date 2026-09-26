@@ -5,12 +5,15 @@
 //! with its own destination, so any nesting of optionals, arrays, hashes,
 //! tuples, and records renders as straight-line C.
 
+use std::collections::BTreeSet;
+
 use boltffi_binding::{
     BuiltinType, CallbackId, ClassId, CodecRead, CustomTypeId, ElementCount, EnumId, MapKind,
     Native, Op, Primitive, ReadPlan, RecordDecl, RecordId,
 };
 
 use crate::{
+    bridge::c::{Identifier, Statement},
     core::{RenderContext, Result},
     target::ruby::{
         support::unsupported,
@@ -35,8 +38,7 @@ impl Decoded {
         }
     }
 
-    /// Returns the statements with `destination` as the assignment target.
-    pub fn assign_to(&self, destination: &str) -> String {
+    fn assign_to(&self, destination: &str) -> String {
         self.statements.replace(DESTINATION, destination)
     }
 }
@@ -56,9 +58,9 @@ impl<'context, 'bindings> Reader<'context, 'bindings> {
     }
 
     /// Renders statements that decode `plan` from `reader` into `destination`.
-    pub fn decode(&mut self, plan: &ReadPlan, destination: &str) -> Result<String> {
+    pub fn decode(&mut self, plan: &ReadPlan, destination: &str) -> Result<Statement> {
         plan.render_with(self)
-            .map(|decoded| decoded.assign_to(destination))
+            .map(|decoded| Statement::new(decoded.assign_to(destination)))
     }
 
     fn local(&mut self, stem: &str) -> String {
@@ -67,7 +69,7 @@ impl<'context, 'bindings> Reader<'context, 'bindings> {
         name
     }
 
-    fn call(function: &str, minimum_size: usize) -> Decoded {
+    fn call(function: &Identifier, minimum_size: usize) -> Decoded {
         Decoded::new(format!("{DESTINATION} = {function}(reader);"), minimum_size)
     }
 }
@@ -77,14 +79,14 @@ impl CodecRead for Reader<'_, '_> {
 
     fn primitive(&mut self, primitive: Primitive) -> Self::Expr {
         let symbols = PrimitiveSymbols::new(primitive);
-        Ok(Self::call(
-            &format!("boltffi_ruby_read_{}", symbols.stem()?),
-            symbols.wire_size(),
-        ))
+        Ok(Self::call(&symbols.reader()?, symbols.wire_size()))
     }
 
     fn string(&mut self) -> Self::Expr {
-        Ok(Self::call("boltffi_ruby_read_string", 4))
+        Ok(Self::call(
+            &Identifier::parse("boltffi_ruby_read_string")?,
+            4,
+        ))
     }
 
     fn utf8_string(&mut self) -> Self::Expr {
@@ -100,25 +102,20 @@ impl CodecRead for Reader<'_, '_> {
     }
 
     fn bytes(&mut self) -> Self::Expr {
-        Ok(Self::call("boltffi_ruby_read_binary", 4))
+        Ok(Self::call(
+            &Identifier::parse("boltffi_ruby_read_binary")?,
+            4,
+        ))
     }
 
     fn direct_record(&mut self, id: RecordId) -> Self::Expr {
-        let minimum_size = match self.context.record(id) {
-            Some(RecordDecl::Direct(record)) => record.layout().size().get() as usize,
-            _ => 0,
-        };
-        Ok(Self::call(
-            &RecordSymbols::new(id, self.context)?.reader(),
-            minimum_size,
-        ))
+        let symbols = RecordSymbols::new(id, self.context)?;
+        let minimum_size = MinimumSize::new(self.context).record(id);
+        Ok(Self::call(symbols.reader(), minimum_size))
     }
 
     fn encoded_record(&mut self, id: RecordId) -> Self::Expr {
-        Ok(Self::call(
-            &RecordSymbols::new(id, self.context)?.reader(),
-            0,
-        ))
+        self.direct_record(id)
     }
 
     fn c_style_enum(&mut self, _: EnumId) -> Self::Expr {
@@ -242,5 +239,122 @@ impl CodecRead for Reader<'_, '_> {
             ),
             4,
         ))
+    }
+}
+
+/// The fewest bytes that one encoded value takes.
+///
+/// A count that claims more elements than the rest of the buffer can hold is
+/// malformed. The reader rejects it before Ruby allocates the container.
+struct MinimumSize<'context, 'bindings> {
+    context: &'context RenderContext<'bindings, Native>,
+    visiting: BTreeSet<RecordId>,
+}
+
+impl<'context, 'bindings> MinimumSize<'context, 'bindings> {
+    fn new(context: &'context RenderContext<'bindings, Native>) -> Self {
+        Self {
+            context,
+            visiting: BTreeSet::new(),
+        }
+    }
+
+    fn record(&mut self, id: RecordId) -> usize {
+        // A record reaches itself only through an optional or a sequence, whose
+        // own prefix is the minimum, so a record on the stack adds nothing.
+        if !self.visiting.insert(id) {
+            return 0;
+        }
+        let size = match self.context.record(id) {
+            Some(RecordDecl::Direct(record)) => record.layout().size().get() as usize,
+            Some(RecordDecl::Encoded(record)) => record
+                .fields()
+                .iter()
+                .map(|field| field.read().render_with(self))
+                .sum(),
+            _ => 0,
+        };
+        self.visiting.remove(&id);
+        size
+    }
+}
+
+impl CodecRead for MinimumSize<'_, '_> {
+    type Expr = usize;
+
+    fn primitive(&mut self, primitive: Primitive) -> Self::Expr {
+        PrimitiveSymbols::new(primitive).wire_size()
+    }
+
+    fn string(&mut self) -> Self::Expr {
+        4
+    }
+
+    fn utf8_string(&mut self) -> Self::Expr {
+        0
+    }
+
+    fn raw_bytes(&mut self) -> Self::Expr {
+        0
+    }
+
+    fn interned_string(&mut self, _: &[String]) -> Self::Expr {
+        0
+    }
+
+    fn bytes(&mut self) -> Self::Expr {
+        4
+    }
+
+    fn direct_record(&mut self, id: RecordId) -> Self::Expr {
+        self.record(id)
+    }
+
+    fn encoded_record(&mut self, id: RecordId) -> Self::Expr {
+        self.record(id)
+    }
+
+    fn c_style_enum(&mut self, _: EnumId) -> Self::Expr {
+        0
+    }
+
+    fn data_enum(&mut self, _: EnumId) -> Self::Expr {
+        0
+    }
+
+    fn class_handle(&mut self, _: ClassId) -> Self::Expr {
+        0
+    }
+
+    fn callback_handle(&mut self, _: CallbackId) -> Self::Expr {
+        0
+    }
+
+    fn custom(&mut self, _: CustomTypeId, _: Self::Expr) -> Self::Expr {
+        0
+    }
+
+    fn builtin(&mut self, _: BuiltinType) -> Self::Expr {
+        0
+    }
+
+    fn optional(&mut self, _: Self::Expr) -> Self::Expr {
+        1
+    }
+
+    fn sequence(&mut self, _: &Op<ElementCount>, _: Self::Expr) -> Self::Expr {
+        4
+    }
+
+    fn tuple(&mut self, elements: Vec<Self::Expr>) -> Self::Expr {
+        elements.into_iter().sum()
+    }
+
+    fn result(&mut self, _: Self::Expr, _: Self::Expr) -> Self::Expr {
+        1
+    }
+
+    fn map(&mut self, _: MapKind, _: Self::Expr, _: Self::Expr) -> Self::Expr {
+        4
     }
 }

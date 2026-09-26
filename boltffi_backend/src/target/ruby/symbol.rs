@@ -7,13 +7,21 @@
 
 use boltffi_binding::{Native, Primitive, RecordDecl, RecordId};
 
-use crate::core::{Error, RenderContext, Result};
+use crate::{
+    bridge::c::{Identifier, Type, TypeFragment},
+    core::{Error, RenderContext, Result},
+};
 
 use super::name_style::Name;
 
 /// C symbols for one record.
 pub struct RecordSymbols {
-    stem: String,
+    class: Identifier,
+    builder: Identifier,
+    reader: Identifier,
+    writer: Identifier,
+    boxer: Identifier,
+    unboxer: Identifier,
 }
 
 impl RecordSymbols {
@@ -26,48 +34,50 @@ impl RecordSymbols {
     }
 
     pub fn for_record(record: &RecordDecl<Native>) -> Result<Self> {
+        let stem = Name::new(record.name()).constant()?;
+        let symbol = |role: &str| Identifier::parse(format!("boltffi_ruby_{role}_{stem}"));
         Ok(Self {
-            stem: Name::new(record.name()).constant()?.to_string(),
+            class: symbol("class")?,
+            builder: symbol("build")?,
+            reader: symbol("read")?,
+            writer: symbol("write")?,
+            boxer: symbol("box")?,
+            unboxer: symbol("unbox")?,
         })
     }
 
     /// The static `VALUE` that holds the record's `Data` class.
-    pub fn class(&self) -> String {
-        format!("boltffi_ruby_class_{}", self.stem)
+    pub fn class(&self) -> &Identifier {
+        &self.class
     }
 
     /// Builds the `Data` instance from member values in declaration order.
-    pub fn builder(&self) -> String {
-        format!("boltffi_ruby_build_{}", self.stem)
+    pub fn builder(&self) -> &Identifier {
+        &self.builder
     }
 
     /// Reads the record from an encoded buffer into a Ruby object.
-    pub fn reader(&self) -> String {
-        format!("boltffi_ruby_read_{}", self.stem)
+    pub fn reader(&self) -> &Identifier {
+        &self.reader
     }
 
     /// Writes a Ruby object into an encoded buffer.
-    pub fn writer(&self) -> String {
-        format!("boltffi_ruby_write_{}", self.stem)
+    pub fn writer(&self) -> &Identifier {
+        &self.writer
     }
 
     /// Converts the direct record's C struct into a Ruby object.
-    pub fn boxer(&self) -> String {
-        format!("boltffi_ruby_box_{}", self.stem)
+    pub fn boxer(&self) -> &Identifier {
+        &self.boxer
     }
 
     /// Converts a Ruby object into the direct record's C struct.
-    pub fn unboxer(&self) -> String {
-        format!("boltffi_ruby_unbox_{}", self.stem)
-    }
-
-    /// Prefix for helpers the record writer needs, such as map callbacks.
-    pub fn helper_prefix(&self) -> String {
-        format!("boltffi_ruby_write_{}", self.stem)
+    pub fn unboxer(&self) -> &Identifier {
+        &self.unboxer
     }
 }
 
-/// Runtime helper suffix and C type for one primitive.
+/// Runtime helpers and C type for one primitive.
 pub struct PrimitiveSymbols {
     primitive: Primitive,
 }
@@ -77,9 +87,49 @@ impl PrimitiveSymbols {
         Self { primitive }
     }
 
-    /// Suffix of the `boltffi_ruby_to_*`, `from_*`, `read_*`, and `write_*` helpers.
-    pub fn stem(&self) -> Result<&'static str> {
-        Ok(match self.primitive {
+    /// Converts a Ruby value into the C value, such as `boltffi_ruby_to_i32`.
+    pub fn ruby_to_c(&self) -> Result<Identifier> {
+        self.helper("to")
+    }
+
+    /// Converts the C value into a Ruby value, such as `boltffi_ruby_from_i32`.
+    pub fn c_to_ruby(&self) -> Result<Identifier> {
+        self.helper("from")
+    }
+
+    /// Reads one encoded value into a Ruby value.
+    pub fn reader(&self) -> Result<Identifier> {
+        self.helper("read")
+    }
+
+    /// Reads one element of a direct vector into a Ruby value.
+    ///
+    /// A direct vector holds `isize` and `usize` at native width, but the
+    /// encoded readers always take 8 bytes for them.
+    pub fn element_reader(&self) -> Result<Identifier> {
+        match self.primitive {
+            Primitive::ISize | Primitive::USize => self.helper("read_native"),
+            _ => self.reader(),
+        }
+    }
+
+    /// Checks one Ruby value and appends its encoded bytes.
+    pub fn writer(&self) -> Result<Identifier> {
+        self.helper("write")
+    }
+
+    /// The C ABI type of the primitive.
+    pub fn c_type(&self) -> Result<TypeFragment> {
+        TypeFragment::anonymous(&Type::primitive(self.primitive)?)
+    }
+
+    /// The number of bytes the primitive takes in an encoded buffer.
+    pub fn wire_size(&self) -> usize {
+        self.primitive.wire_size().get() as usize
+    }
+
+    fn helper(&self, role: &str) -> Result<Identifier> {
+        let stem = match self.primitive {
             Primitive::Bool => "bool",
             Primitive::I8 => "i8",
             Primitive::U8 => "u8",
@@ -99,36 +149,7 @@ impl PrimitiveSymbols {
                     shape: "unknown primitive",
                 });
             }
-        })
-    }
-
-    /// The C ABI type of the primitive.
-    pub fn c_type(&self) -> Result<&'static str> {
-        Ok(match self.primitive {
-            Primitive::Bool => "bool",
-            Primitive::I8 => "int8_t",
-            Primitive::U8 => "uint8_t",
-            Primitive::I16 => "int16_t",
-            Primitive::U16 => "uint16_t",
-            Primitive::I32 => "int32_t",
-            Primitive::U32 => "uint32_t",
-            Primitive::I64 => "int64_t",
-            Primitive::U64 => "uint64_t",
-            Primitive::ISize => "intptr_t",
-            Primitive::USize => "uintptr_t",
-            Primitive::F32 => "float",
-            Primitive::F64 => "double",
-            _ => {
-                return Err(Error::UnsupportedTarget {
-                    target: "ruby",
-                    shape: "unknown primitive",
-                });
-            }
-        })
-    }
-
-    /// The number of bytes the primitive takes in an encoded buffer.
-    pub fn wire_size(&self) -> usize {
-        self.primitive.wire_size().get() as usize
+        };
+        Identifier::parse(format!("boltffi_ruby_{role}_{stem}"))
     }
 }

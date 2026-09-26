@@ -1,3 +1,5 @@
+use std::collections::{BTreeMap, btree_map::Entry};
+
 use boltffi_binding::{CanonicalName, FieldKey, NamePart};
 
 use crate::core::{Error, Result, name_case};
@@ -31,6 +33,47 @@ impl<'name> Name<'name> {
             .map(NamePart::as_str)
             .collect::<Vec<_>>()
             .join("_")
+    }
+}
+
+/// The Rust spelling of a declaration name, such as `hash_`, for diagnostics.
+pub fn spelling(name: &CanonicalName) -> String {
+    name.source_spelling()
+        .map(str::to_owned)
+        .unwrap_or_else(|| Name::new(name).snake())
+}
+
+/// Generated Ruby names in one scope, with the declaration that took each.
+///
+/// Escaping can map two Rust names to one Ruby name: a field `hash` becomes
+/// the member `hash_`, which a field `hash_` also wants.
+pub struct NameScope {
+    scope: String,
+    names: BTreeMap<String, String>,
+}
+
+impl NameScope {
+    pub fn new(scope: impl Into<String>) -> Self {
+        Self {
+            scope: scope.into(),
+            names: BTreeMap::new(),
+        }
+    }
+
+    /// Claims `name` for `subject`, such as ``field `hash_` ``.
+    pub fn claim(&mut self, name: &str, subject: String) -> Result<()> {
+        match self.names.entry(name.to_owned()) {
+            Entry::Vacant(entry) => {
+                entry.insert(subject);
+                Ok(())
+            }
+            Entry::Occupied(entry) => Err(Error::RubyNameCollision {
+                scope: self.scope.clone(),
+                name: name.to_owned(),
+                existing: entry.get().clone(),
+                colliding: subject,
+            }),
+        }
     }
 }
 

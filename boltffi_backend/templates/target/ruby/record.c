@@ -17,7 +17,7 @@ BOLTFFI_RUBY_MAYBE_UNUSED static VALUE {{ record.symbols.boxer() }}({{ direct.c_
     (void)value;
 {%- endif %}
 {%- for field in direct.fields %}
-    boltffi_fields[{{ loop.index0 }}] = boltffi_ruby_from_{{ field.stem }}(value.{{ field.c_name }});
+    boltffi_fields[{{ loop.index0 }}] = {{ field.c_to_ruby }}(value.{{ field.c_name }});
 {%- endfor %}
     return {{ record.symbols.builder() }}(boltffi_fields);
 }
@@ -27,7 +27,7 @@ BOLTFFI_RUBY_MAYBE_UNUSED static {{ direct.c_type }} {{ record.symbols.unboxer()
     memset(&record, 0, sizeof(record));
     boltffi_ruby_expect_record(value, {{ record.symbols.class() }});
 {%- for field in direct.fields %}
-    record.{{ field.c_name }} = boltffi_ruby_to_{{ field.stem }}(RSTRUCT_GET(value, {{ loop.index0 }}));
+    record.{{ field.c_name }} = {{ field.ruby_to_c }}(RSTRUCT_GET(value, {{ loop.index0 }}));
 {%- endfor %}
     return record;
 }

@@ -1,12 +1,16 @@
 use std::fmt;
 
-use crate::core::{Error, LanguageSyntax, Result, syntax::sealed};
+use crate::{
+    bridge::c,
+    core::{Error, LanguageSyntax, Result, syntax::sealed},
+};
 
 /// Ruby syntax fragment family.
 ///
-/// The Ruby target emits C for the extension body. The Ruby-facing names in
-/// that C (method names, `Data` member names, constant names) and the small
-/// Ruby package files use these fragments.
+/// The Ruby target emits a C extension, so its types, expressions,
+/// statements, and argument lists are the C bridge fragments. The Ruby-facing
+/// names inside that C (method names, `Data` member names, constant names)
+/// and the literals in the Ruby package files use the fragments below.
 #[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
 pub struct Syntax;
 
@@ -22,21 +26,9 @@ pub struct Constant(String);
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub struct ConstantPath(Vec<Constant>);
 
-/// Ruby expression syntax.
-#[derive(Clone, Debug, Eq, Hash, PartialEq)]
-pub struct Expression(String);
-
-/// Ruby statement syntax.
-#[derive(Clone, Debug, Eq, Hash, PartialEq)]
-pub struct Statement(String);
-
-/// Ruby literal syntax.
+/// A double-quoted Ruby string literal.
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub struct Literal(String);
-
-/// Ruby argument list syntax.
-#[derive(Clone, Debug, Default, Eq, Hash, PartialEq)]
-pub struct ArgumentList(Vec<Expression>);
 
 /// Methods every Ruby object and every `Data` instance answers.
 ///
@@ -207,11 +199,11 @@ impl LanguageSyntax for Syntax {
     ];
 
     type Identifier = Identifier;
-    type Type = Constant;
-    type Expr = Expression;
-    type Stmt = Statement;
+    type Type = c::TypeFragment;
+    type Expr = c::Expression;
+    type Stmt = c::Statement;
     type Literal = Literal;
-    type Arguments = ArgumentList;
+    type Arguments = c::ArgumentList;
 }
 
 impl sealed::LanguageSyntax for Syntax {}
@@ -304,20 +296,6 @@ impl ConstantPath {
     }
 }
 
-impl Expression {
-    /// Creates Ruby expression syntax.
-    pub fn new(fragment: impl Into<String>) -> Self {
-        Self(fragment.into())
-    }
-}
-
-impl Statement {
-    /// Creates Ruby statement syntax.
-    pub fn new(fragment: impl Into<String>) -> Self {
-        Self(fragment.into())
-    }
-}
-
 impl Literal {
     /// Creates a double-quoted Ruby string literal.
     pub fn string(value: &str) -> Self {
@@ -359,42 +337,15 @@ impl fmt::Display for ConstantPath {
     }
 }
 
-impl fmt::Display for Expression {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        formatter.write_str(&self.0)
-    }
-}
-
-impl fmt::Display for Statement {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        formatter.write_str(&self.0)
-    }
-}
-
 impl fmt::Display for Literal {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter.write_str(&self.0)
     }
 }
 
-impl fmt::Display for ArgumentList {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let arguments = self
-            .0
-            .iter()
-            .map(ToString::to_string)
-            .collect::<Vec<_>>()
-            .join(", ");
-        formatter.write_str(&arguments)
-    }
-}
-
 impl sealed::SyntaxFragment for Identifier {}
 impl sealed::SyntaxFragment for Constant {}
-impl sealed::SyntaxFragment for Expression {}
-impl sealed::SyntaxFragment for Statement {}
 impl sealed::SyntaxFragment for Literal {}
-impl sealed::SyntaxFragment for ArgumentList {}
 
 #[cfg(test)]
 mod tests {

@@ -551,7 +551,8 @@ Enable Ruby with `--experimental` or `experimental = ["ruby"]` at the top level.
 - `cargo_manifest` (string, optional): Crate manifest path, relative to
   `{output}/ext/<stem>/`. The generated `extconf.rb` builds this crate when no
   prebuilt static library exists, so a source gem can compile without the
-  BoltFFI CLI.
+  BoltFFI CLI. The build turns on the cargo features that `boltffi generate`
+  resolved, so the library exports every function the extension calls.
 
 `pack ruby` requires the `staticlib` crate type and builds for the current host.
 

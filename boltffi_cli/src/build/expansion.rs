@@ -119,6 +119,12 @@ impl BindingExpansion {
         &self.cargo_args
     }
 
+    /// Returns the active cargo features of the selected package, comma
+    /// separated, as the binding metadata sees them.
+    pub fn features(&self) -> &str {
+        &self.features
+    }
+
     pub fn artifact_name(&self) -> &str {
         self.library.artifact_name()
     }

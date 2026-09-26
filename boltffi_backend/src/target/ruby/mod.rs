@@ -48,6 +48,7 @@ pub struct RubyHost {
     version: Option<String>,
     library: Option<String>,
     cargo_manifest: Option<String>,
+    cargo_features: String,
 }
 
 impl RubyHost {
@@ -86,6 +87,15 @@ impl RubyHost {
     /// that the generated `extconf.rb` builds when no prebuilt library exists.
     pub fn cargo_manifest(mut self, manifest: impl Into<String>) -> Self {
         self.cargo_manifest = Some(manifest.into());
+        self
+    }
+
+    /// Records the cargo features that the binding expansion resolved, comma
+    /// separated. The generated `extconf.rb` builds the crate with exactly
+    /// these features, so the library exports every function the extension
+    /// calls.
+    pub fn cargo_features(mut self, features: impl Into<String>) -> Self {
+        self.cargo_features = features.into();
         self
     }
 
@@ -259,6 +269,7 @@ impl host::HostBackend for RubyHost {
             module: &module,
             artifact: &artifact,
             cargo_manifest: self.cargo_manifest.as_deref(),
+            cargo_features: &self.cargo_features,
             crate_name: &crate_name,
         };
         let source = GeneratedFile::new(
@@ -373,7 +384,8 @@ mod tests {
             .module_name("CheckoutEngine::Native")
             .expect("valid module")
             .native_library("checkout_engine")
-            .cargo_manifest("../../Cargo.toml");
+            .cargo_manifest("../../Cargo.toml")
+            .cargo_features("default,ffi");
         let output = render(host, "#[export] pub fn ping() -> bool { true }");
 
         let paths = output
@@ -516,10 +528,10 @@ mod tests {
             .render(&bindings)
             .expect_err("both fields want the member hash_");
 
-        assert!(matches!(
-            error,
-            Error::RubyNameCollision { ref name, .. } if name == "hash_"
-        ));
+        assert_eq!(
+            error.to_string(),
+            "ruby name collision in record `Tagged` members: `hash_` is used by field `hash` and field `hash_`"
+        );
     }
 
     #[test]

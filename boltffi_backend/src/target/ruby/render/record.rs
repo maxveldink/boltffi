@@ -12,20 +12,18 @@
 //! A direct record also crosses as its C struct: the box and unbox functions
 //! convert between that struct and the `Data` instance.
 
-use std::collections::BTreeSet;
-
 use askama::Template;
-use boltffi_binding::{DirectRecordDecl, EncodedRecordDecl, Native, RecordDecl};
+use boltffi_binding::{DirectRecordDecl, EncodedRecordDecl, FieldKey, Native, RecordDecl};
 
 use crate::{
-    bridge::c::CBridgeContract,
+    bridge::c::{CBridgeContract, Expression, Identifier, Statement, TypeFragment},
     core::{AuxChunk, Diagnostic, Emitted, Error, RenderContext, Result},
     target::ruby::{
         codec::{read::Reader, write::Writer},
-        name_style::{Name, member},
+        name_style::{Name, NameScope, member, spelling},
         support::{Support, unsupported},
         symbol::{PrimitiveSymbols, RecordSymbols},
-        syntax::{Constant, Identifier},
+        syntax::{Constant, Identifier as RubyIdentifier},
     },
 };
 
@@ -46,7 +44,7 @@ struct ForwardTemplate<'record> {
 /// One rendered record.
 pub struct Record {
     symbols: RecordSymbols,
-    members: Vec<Identifier>,
+    members: Vec<RubyIdentifier>,
     body: Body,
     unbound_methods: bool,
 }
@@ -57,7 +55,7 @@ enum Body {
 }
 
 struct DirectBody {
-    c_type: String,
+    c_type: TypeFragment,
     fields: Vec<DirectField>,
 }
 
@@ -67,20 +65,23 @@ struct EncodedBody {
 }
 
 struct DirectField {
-    c_name: String,
-    stem: &'static str,
+    c_name: Identifier,
+    ruby_to_c: Identifier,
+    c_to_ruby: Identifier,
 }
 
 struct EncodedField {
-    read: String,
-    write: String,
+    read: Statement,
+    write: Statement,
 }
 
 /// The `Data` class definition for one rendered record.
 pub struct Registration {
     pub constant: Constant,
-    pub class: String,
-    pub members: Vec<Identifier>,
+    pub class: Identifier,
+    pub members: Vec<RubyIdentifier>,
+    /// The Rust record, for name collision diagnostics.
+    pub subject: String,
 }
 
 impl Record {
@@ -130,9 +131,11 @@ impl Record {
             .iter()
             .zip(c_record.fields())
             .map(|(field, c_field)| {
+                let symbols = PrimitiveSymbols::new(field.ty().primitive());
                 Ok(DirectField {
-                    c_name: c_field.name().to_owned(),
-                    stem: PrimitiveSymbols::new(field.ty().primitive()).stem()?,
+                    c_name: Identifier::parse(c_field.name())?,
+                    ruby_to_c: symbols.ruby_to_c()?,
+                    c_to_ruby: symbols.c_to_ruby()?,
                 })
             })
             .collect::<Result<Vec<_>>>()?;
@@ -157,8 +160,8 @@ impl Record {
                 let read = reader.decode(field.read(), &format!("boltffi_fields[{index}]"))?;
                 let mut writer = Writer::new(
                     context,
-                    format!("boltffi_field_{index}"),
-                    format!("{}_field{index}", symbols.helper_prefix()),
+                    Expression::new(format!("boltffi_field_{index}")),
+                    format!("{}_field{index}", symbols.writer()),
                 )
                 .root_path(vec![field.key().clone()]);
                 let write = writer.encode(field.write())?;
@@ -177,33 +180,37 @@ impl Record {
 
 impl Registration {
     pub fn from_declaration(declaration: &RecordDecl<Native>) -> Result<Self> {
-        let members = match declaration {
-            RecordDecl::Direct(record) => record
-                .fields()
-                .iter()
-                .map(|field| member(field.key()))
-                .collect::<Result<Vec<_>>>()?,
-            RecordDecl::Encoded(record) => record
-                .fields()
-                .iter()
-                .map(|field| member(field.key()))
-                .collect::<Result<Vec<_>>>()?,
+        let keys: Vec<&FieldKey> = match declaration {
+            RecordDecl::Direct(record) => record.fields().iter().map(|field| field.key()).collect(),
+            RecordDecl::Encoded(record) => {
+                record.fields().iter().map(|field| field.key()).collect()
+            }
             _ => return unsupported("unknown record declaration"),
         };
         let constant = Name::new(declaration.name()).constant()?;
-        // Escaping can turn two Rust fields into one member, such as `hash` and
-        // `hash_`. `Data.define` raises for a duplicate member at load time.
-        let mut seen = BTreeSet::new();
-        if let Some(duplicate) = members.iter().find(|member| !seen.insert(member.as_str())) {
-            return Err(Error::RubyNameCollision {
-                scope: format!("record {constant} members"),
-                name: duplicate.as_str().to_owned(),
-            });
-        }
+        // `Data.define` raises at load time for a duplicate member.
+        let mut scope = NameScope::new(format!("record `{constant}` members"));
+        let members = keys
+            .into_iter()
+            .map(|key| {
+                let member = member(key)?;
+                scope.claim(member.as_str(), field_subject(key))?;
+                Ok(member)
+            })
+            .collect::<Result<Vec<_>>>()?;
         Ok(Self {
             constant,
-            class: RecordSymbols::for_record(declaration)?.class(),
+            class: RecordSymbols::for_record(declaration)?.class().clone(),
             members,
+            subject: format!("record `{}`", spelling(declaration.name())),
         })
+    }
+}
+
+fn field_subject(key: &FieldKey) -> String {
+    match key {
+        FieldKey::Named(name) => format!("field `{}`", spelling(name)),
+        FieldKey::Position(position) => format!("field {position}"),
+        _ => "field".to_owned(),
     }
 }

@@ -22,6 +22,10 @@ module BoltFFIExtconf
   ARTIFACT = {{ artifact }}
   EXTENSION = {{ extension }}
   DEFAULT_MANIFEST = {% if let Some(manifest) = manifest %}File.expand_path({{ manifest }}, __dir__){% else %}nil{% endif %}
+  # The cargo features that `boltffi generate` resolved, comma separated. A
+  # cargo build turns on exactly these, so the library exports every function
+  # this extension calls.
+  FEATURES = {{ features }}
 
   class << self
     def static_library
@@ -62,12 +66,13 @@ module BoltFFIExtconf
         "BOLTFFI_BINDING_EXPANSION_ROOT" => File.dirname(manifest),
         "BOLTFFI_BINDING_EXPANSION_SOURCE" => library["src_path"],
         "BOLTFFI_BINDING_EXPANSION_SURFACE" => "native",
-        "BOLTFFI_BINDING_METADATA_FEATURES" => default_features(package["features"]).join(","),
+        "BOLTFFI_BINDING_METADATA_FEATURES" => FEATURES,
       }
       command = [
-        cargo, "rustc", "--lib", "--release", "--crate-type", "staticlib",
+        cargo, "rustc", "--lib", "--release", "--crate-type", "staticlib", "--no-default-features",
         "--manifest-path", manifest, "--message-format", "json-render-diagnostics",
       ]
+      command.push("--features", FEATURES) unless FEATURES.empty?
       command << "--locked" if File.exist?(File.join(metadata["workspace_root"], "Cargo.lock"))
       command.push("--", "--cfg", "boltffi_binding_expansion", "--print", "native-static-libs")
 
@@ -98,23 +103,6 @@ module BoltFFIExtconf
         "native_link_search_paths" => search_paths,
       }
       [archive, metadata]
-    end
-
-    # The same features the binding expansion sees in a default cargo build:
-    # `default` and every local feature it turns on.
-    def default_features(features)
-      active = features.key?("default") ? ["default"] : []
-      pending = active.dup
-      until pending.empty?
-        features.fetch(pending.shift, []).each do |dependency|
-          name = dependency.delete_prefix("dep:").split("/").first.delete_suffix("?")
-          next unless features.key?(name) && !active.include?(name)
-
-          active << name
-          pending << name
-        end
-      end
-      active.sort
     end
 
     def configure
