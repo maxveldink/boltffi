@@ -1,14 +1,12 @@
 static VALUE {{ record.symbols.builder() }}(const VALUE *values) {
+    VALUE boltffi_record = rb_obj_alloc({{ record.symbols.class() }});
 {%- if record.members.is_empty() %}
     (void)values;
-    return rb_class_new_instance_kw(0, NULL, {{ record.symbols.class() }}, RB_NO_KEYWORDS);
-{%- else %}
-    VALUE boltffi_keywords = rb_hash_new_capa({{ record.members.len() }});
-{%- for member in record.members %}
-    rb_hash_aset(boltffi_keywords, ID2SYM(rb_intern("{{ member }}")), values[{{ loop.index0 }}]);
-{%- endfor %}
-    return rb_class_new_instance_kw(1, &boltffi_keywords, {{ record.symbols.class() }}, RB_PASS_KEYWORDS);
 {%- endif %}
+{%- for member in record.members %}
+    RSTRUCT_SET(boltffi_record, {{ loop.index0 }}, values[{{ loop.index0 }}]);
+{%- endfor %}
+    return rb_obj_freeze(boltffi_record);
 }
 {%- match record.body %}
 {%- when Body::Direct(direct) %}

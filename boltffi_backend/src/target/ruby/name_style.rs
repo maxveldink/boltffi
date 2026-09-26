@@ -51,12 +51,16 @@ pub fn member(key: &FieldKey) -> Result<Identifier> {
 /// The default Ruby module for a Cargo package, such as `CheckoutEngine` for
 /// `checkout-engine`.
 pub fn default_module(package: &CanonicalName) -> Result<ConstantPath> {
-    Constant::parse(name_case::upper_camel(package)).map(ConstantPath::single)
+    Constant::parse(name_case::upper_camel_from_snake(&package_snake(package)))
+        .map(ConstantPath::single)
 }
 
 /// The `snake_case` spelling of a Cargo package, such as `checkout_engine`.
+///
+/// The binding contract keeps the Cargo package name as one name part, dashes
+/// included, so the dashes become underscores here.
 pub fn package_snake(package: &CanonicalName) -> String {
-    Name::new(package).snake()
+    extension_stem(&Name::new(package).snake())
 }
 
 /// The extension file stem for a gem, such as `checkout_engine` for
@@ -82,12 +86,17 @@ mod tests {
 
     #[test]
     fn package_names_map_to_ruby_modules_and_extension_stems() {
-        let package = CanonicalName::new(vec![NamePart::new("checkout"), NamePart::new("engine")]);
-        assert_eq!(package_snake(&package), "checkout_engine");
-        assert_eq!(
-            default_module(&package).unwrap().to_string(),
-            "CheckoutEngine"
-        );
+        for package in [
+            CanonicalName::single("checkout-engine"),
+            CanonicalName::single("checkout_engine"),
+            CanonicalName::new(vec![NamePart::new("checkout"), NamePart::new("engine")]),
+        ] {
+            assert_eq!(package_snake(&package), "checkout_engine");
+            assert_eq!(
+                default_module(&package).unwrap().to_string(),
+                "CheckoutEngine"
+            );
+        }
         assert_eq!(extension_stem("checkout-engine"), "checkout_engine");
     }
 }

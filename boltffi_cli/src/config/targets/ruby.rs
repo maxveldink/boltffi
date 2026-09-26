@@ -10,7 +10,7 @@ pub struct RubyConfig {
     /// Directory that receives the generated gem sources.
     #[serde(default = "default_ruby_output")]
     pub output: PathBuf,
-    /// Gem name. Defaults to the Cargo package name in `snake_case`.
+    /// Gem name. Defaults to the Cargo package name.
     #[serde(default)]
     pub gem_name: Option<String>,
     /// Ruby module that holds the functions and records, such as `Demo` or

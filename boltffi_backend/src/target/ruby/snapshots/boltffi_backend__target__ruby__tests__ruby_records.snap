@@ -16,10 +16,10 @@ BOLTFFI_RUBY_MAYBE_UNUSED static VALUE boltffi_ruby_read_Shape(boltffi_ruby_read
 BOLTFFI_RUBY_MAYBE_UNUSED static void boltffi_ruby_write_Shape(boltffi_ruby_writer *writer, VALUE value);
 
 static VALUE boltffi_ruby_build_Point(const VALUE *values) {
-    VALUE boltffi_keywords = rb_hash_new_capa(2);
-    rb_hash_aset(boltffi_keywords, ID2SYM(rb_intern("x")), values[0]);
-    rb_hash_aset(boltffi_keywords, ID2SYM(rb_intern("y")), values[1]);
-    return rb_class_new_instance_kw(1, &boltffi_keywords, boltffi_ruby_class_Point, RB_PASS_KEYWORDS);
+    VALUE boltffi_record = rb_obj_alloc(boltffi_ruby_class_Point);
+    RSTRUCT_SET(boltffi_record, 0, values[0]);
+    RSTRUCT_SET(boltffi_record, 1, values[1]);
+    return rb_obj_freeze(boltffi_record);
 }
 
 BOLTFFI_RUBY_MAYBE_UNUSED static VALUE boltffi_ruby_box_Point(___Point value) {
@@ -50,13 +50,13 @@ BOLTFFI_RUBY_MAYBE_UNUSED static void boltffi_ruby_write_Point(boltffi_ruby_writ
 }
 
 static VALUE boltffi_ruby_build_Shape(const VALUE *values) {
-    VALUE boltffi_keywords = rb_hash_new_capa(5);
-    rb_hash_aset(boltffi_keywords, ID2SYM(rb_intern("name")), values[0]);
-    rb_hash_aset(boltffi_keywords, ID2SYM(rb_intern("hash_")), values[1]);
-    rb_hash_aset(boltffi_keywords, ID2SYM(rb_intern("points")), values[2]);
-    rb_hash_aset(boltffi_keywords, ID2SYM(rb_intern("center")), values[3]);
-    rb_hash_aset(boltffi_keywords, ID2SYM(rb_intern("labels")), values[4]);
-    return rb_class_new_instance_kw(1, &boltffi_keywords, boltffi_ruby_class_Shape, RB_PASS_KEYWORDS);
+    VALUE boltffi_record = rb_obj_alloc(boltffi_ruby_class_Shape);
+    RSTRUCT_SET(boltffi_record, 0, values[0]);
+    RSTRUCT_SET(boltffi_record, 1, values[1]);
+    RSTRUCT_SET(boltffi_record, 2, values[2]);
+    RSTRUCT_SET(boltffi_record, 3, values[3]);
+    RSTRUCT_SET(boltffi_record, 4, values[4]);
+    return rb_obj_freeze(boltffi_record);
 }
 
 static int boltffi_ruby_write_Shape_field4_map_0(VALUE boltffi_bound_0, VALUE boltffi_bound_1, VALUE boltffi_argument) {

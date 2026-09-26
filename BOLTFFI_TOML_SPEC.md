@@ -540,7 +540,7 @@ Enable Ruby with `--experimental` or `experimental = ["ruby"]` at the top level.
   - `pack ruby` also copies the host static library and its link metadata into
     `{output}/ext/<stem>/`.
 - `gem_name` (string, optional): Gem name.
-  - Default: the Cargo package name in `snake_case`.
+  - Default: the Cargo package name.
   - The extension stem `<stem>` is the gem name in `snake_case`. It names
     `lib/<stem>.rb`, `ext/<stem>/`, and the `Init_<stem>` entry point.
 - `module_name` (string, optional): Ruby module that holds the functions and

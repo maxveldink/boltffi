@@ -4,6 +4,11 @@
 //! per field. The extension builds each instance eagerly, so Ruby code reads
 //! fields through plain `Data` readers that YJIT compiles like `attr_reader`.
 //!
+//! The extension allocates the instance, sets each member, and freezes it.
+//! `Data.new` would build a keyword `Hash` and call `initialize` instead,
+//! which costs more than the native call itself. A value that Rust returns
+//! is complete, so it skips `initialize`, as `Marshal.load` does.
+//!
 //! A direct record also crosses as its C struct: the box and unbox functions
 //! convert between that struct and the `Data` instance.
 

@@ -98,10 +98,11 @@ impl RubyHost {
         Ok(Target::new(self, CBridge::new(header)?))
     }
 
+    /// The gem name: the configured name, or the Cargo package name.
     fn gem(&self, bindings: &Bindings<Native>) -> String {
         self.gem
             .clone()
-            .unwrap_or_else(|| package_snake(bindings.package().name()))
+            .unwrap_or_else(|| bindings.package().name().as_path_string())
     }
 
     fn stem(&self, bindings: &Bindings<Native>) -> String {
@@ -250,7 +251,7 @@ impl host::HostBackend for RubyHost {
             .clone()
             .or_else(|| bindings.package().version().map(str::to_owned))
             .unwrap_or_else(|| "0.1.0".to_owned());
-        let crate_name = package_snake(bindings.package().name());
+        let crate_name = bindings.package().name().as_path_string();
         let package = Package {
             gem: &gem,
             version: &version,
