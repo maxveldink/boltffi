@@ -249,6 +249,22 @@ static inline VALUE boltffi_ruby_read_usize(boltffi_ruby_reader *reader) { retur
 static inline VALUE boltffi_ruby_read_f32(boltffi_ruby_reader *reader) { return boltffi_ruby_from_f32(boltffi_ruby_read_raw_f32(reader)); }
 static inline VALUE boltffi_ruby_read_f64(boltffi_ruby_reader *reader) { return boltffi_ruby_from_f64(boltffi_ruby_read_raw_f64(reader)); }
 
+/*
+ * A direct vector holds `isize` and `usize` at native width. The wire format
+ * always spends 8 bytes on them, so the wire readers above do not apply.
+ */
+static inline VALUE boltffi_ruby_read_native_isize(boltffi_ruby_reader *reader) {
+    intptr_t value;
+    memcpy(&value, boltffi_ruby_read_bytes(reader, sizeof(value)), sizeof(value));
+    return boltffi_ruby_from_isize(value);
+}
+
+static inline VALUE boltffi_ruby_read_native_usize(boltffi_ruby_reader *reader) {
+    uintptr_t value;
+    memcpy(&value, boltffi_ruby_read_bytes(reader, sizeof(value)), sizeof(value));
+    return boltffi_ruby_from_usize(value);
+}
+
 static inline bool boltffi_ruby_read_option_tag(boltffi_ruby_reader *reader) {
     uint8_t tag = boltffi_ruby_read_raw_u8(reader);
     if (tag > 1) {

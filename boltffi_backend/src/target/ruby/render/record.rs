@@ -12,12 +12,14 @@
 //! A direct record also crosses as its C struct: the box and unbox functions
 //! convert between that struct and the `Data` instance.
 
+use std::collections::BTreeSet;
+
 use askama::Template;
 use boltffi_binding::{DirectRecordDecl, EncodedRecordDecl, Native, RecordDecl};
 
 use crate::{
     bridge::c::CBridgeContract,
-    core::{AuxChunk, Diagnostic, Emitted, RenderContext, Result},
+    core::{AuxChunk, Diagnostic, Emitted, Error, RenderContext, Result},
     target::ruby::{
         codec::{read::Reader, write::Writer},
         name_style::{Name, member},
@@ -116,12 +118,13 @@ impl Record {
     }
 
     fn direct(record: &DirectRecordDecl<Native>, bridge: &CBridgeContract) -> Result<Body> {
-        let c_record = bridge.source_direct_record(record.id()).ok_or(
-            crate::core::Error::BrokenBridgeContract {
-                bridge: "c",
-                invariant: "direct record has no C typedef",
-            },
-        )?;
+        let c_record =
+            bridge
+                .source_direct_record(record.id())
+                .ok_or(Error::BrokenBridgeContract {
+                    bridge: "c",
+                    invariant: "direct record has no C typedef",
+                })?;
         let fields = record
             .fields()
             .iter()
@@ -187,8 +190,18 @@ impl Registration {
                 .collect::<Result<Vec<_>>>()?,
             _ => return unsupported("unknown record declaration"),
         };
+        let constant = Name::new(declaration.name()).constant()?;
+        // Escaping can turn two Rust fields into one member, such as `hash` and
+        // `hash_`. `Data.define` raises for a duplicate member at load time.
+        let mut seen = BTreeSet::new();
+        if let Some(duplicate) = members.iter().find(|member| !seen.insert(member.as_str())) {
+            return Err(Error::RubyNameCollision {
+                scope: format!("record {constant} members"),
+                name: duplicate.as_str().to_owned(),
+            });
+        }
         Ok(Self {
-            constant: Name::new(declaration.name()).constant()?,
+            constant,
             class: RecordSymbols::for_record(declaration)?.class(),
             members,
         })

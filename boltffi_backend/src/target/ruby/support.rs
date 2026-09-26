@@ -12,6 +12,15 @@ use boltffi_binding::{
 
 use crate::core::{Error, RenderContext, Result};
 
+/// The outermost shape of a codec tree that the target can move.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum Shape {
+    /// `Option<T>`: Ruby `nil` or the value.
+    Optional,
+    /// Every other shape.
+    Value,
+}
+
 /// Walks codec trees and records to find the first shape Ruby cannot move.
 pub struct Support<'context, 'bindings> {
     context: &'context RenderContext<'bindings, Native>,
@@ -38,7 +47,7 @@ impl<'context, 'bindings> Support<'context, 'bindings> {
             Some(RecordDecl::Encoded(record)) => record
                 .fields()
                 .iter()
-                .try_for_each(|field| field.read().render_with(self)),
+                .try_for_each(|field| field.read().render_with(self).map(drop)),
             Some(_) => unsupported("unknown record declaration"),
             None => Err(Error::UnexpectedBindingShape {
                 layer: "ruby host",
@@ -51,19 +60,19 @@ impl<'context, 'bindings> Support<'context, 'bindings> {
 
     /// Checks one codec tree.
     pub fn codec(&mut self, plan: &ReadPlan) -> Result<()> {
-        plan.render_with(self)
+        plan.render_with(self).map(drop)
     }
 }
 
 impl CodecRead for Support<'_, '_> {
-    type Expr = Result<()>;
+    type Expr = Result<Shape>;
 
     fn primitive(&mut self, _: Primitive) -> Self::Expr {
-        Ok(())
+        Ok(Shape::Value)
     }
 
     fn string(&mut self) -> Self::Expr {
-        Ok(())
+        Ok(Shape::Value)
     }
 
     fn utf8_string(&mut self) -> Self::Expr {
@@ -79,15 +88,15 @@ impl CodecRead for Support<'_, '_> {
     }
 
     fn bytes(&mut self) -> Self::Expr {
-        Ok(())
+        Ok(Shape::Value)
     }
 
     fn direct_record(&mut self, id: RecordId) -> Self::Expr {
-        self.record(id)
+        self.record(id).map(|()| Shape::Value)
     }
 
     fn encoded_record(&mut self, id: RecordId) -> Self::Expr {
-        self.record(id)
+        self.record(id).map(|()| Shape::Value)
     }
 
     fn c_style_enum(&mut self, _: EnumId) -> Self::Expr {
@@ -115,15 +124,22 @@ impl CodecRead for Support<'_, '_> {
     }
 
     fn optional(&mut self, inner: Self::Expr) -> Self::Expr {
-        inner
+        // Ruby `nil` stands for `None`, so `Some(None)` would also become `nil`.
+        match inner? {
+            Shape::Optional => unsupported("nested optional"),
+            Shape::Value => Ok(Shape::Optional),
+        }
     }
 
     fn sequence(&mut self, _: &Op<ElementCount>, element: Self::Expr) -> Self::Expr {
-        element
+        element.map(|_| Shape::Value)
     }
 
     fn tuple(&mut self, elements: Vec<Self::Expr>) -> Self::Expr {
-        elements.into_iter().collect()
+        elements
+            .into_iter()
+            .try_for_each(|element| element.map(drop))
+            .map(|()| Shape::Value)
     }
 
     fn result(&mut self, _: Self::Expr, _: Self::Expr) -> Self::Expr {
@@ -131,7 +147,9 @@ impl CodecRead for Support<'_, '_> {
     }
 
     fn map(&mut self, _: MapKind, key: Self::Expr, value: Self::Expr) -> Self::Expr {
-        key.and(value)
+        key?;
+        value?;
+        Ok(Shape::Value)
     }
 }
 

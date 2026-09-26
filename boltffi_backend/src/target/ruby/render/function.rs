@@ -487,9 +487,15 @@ impl ReturnConversion {
                 let (element_type, read) = match element {
                     DirectVectorElementType::Primitive(primitive) => {
                         let symbols = PrimitiveSymbols::new(primitive.primitive());
+                        // A direct vector holds `isize` and `usize` at native
+                        // width; the wire readers always take 8 bytes.
+                        let width = match primitive.primitive() {
+                            Primitive::ISize | Primitive::USize => "native_",
+                            _ => "",
+                        };
                         (
                             symbols.c_type()?.to_owned(),
-                            format!("boltffi_ruby_read_{}", symbols.stem()?),
+                            format!("boltffi_ruby_read_{width}{}", symbols.stem()?),
                         )
                     }
                     DirectVectorElementType::Record(record) => (

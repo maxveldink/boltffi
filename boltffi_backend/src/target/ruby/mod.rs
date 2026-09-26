@@ -421,6 +421,9 @@ mod tests {
 
             #[export]
             pub fn ok() -> bool { true }
+
+            #[export]
+            pub fn flatten(value: Option<Option<i32>>) -> Option<i32> { value.flatten() }
         "#;
         let bindings = bindings(source);
         let output = RubyHost::new()
@@ -441,6 +444,7 @@ mod tests {
                 "mode: enums are not implemented in the Ruby host",
                 "current::mode: enum return",
                 "parse: fallible function",
+                "flatten: nested optional",
             ]
         );
         let extension = file(&output, "ext/demo/demo.c");
@@ -492,6 +496,29 @@ mod tests {
         assert!(matches!(
             error,
             Error::RubyNameCollision { ref name, .. } if name == "freeze_"
+        ));
+    }
+
+    #[test]
+    fn ruby_record_members_that_escape_to_one_name_collide() {
+        let bindings = bindings(
+            r#"
+            #[data]
+            pub struct Tagged { pub hash: String, pub hash_: String }
+
+            #[export]
+            pub fn tagged(value: Tagged) -> Tagged { value }
+            "#,
+        );
+        let error = RubyHost::new()
+            .into_target(&bindings)
+            .expect("Ruby target")
+            .render(&bindings)
+            .expect_err("both fields want the member hash_");
+
+        assert!(matches!(
+            error,
+            Error::RubyNameCollision { ref name, .. } if name == "hash_"
         ));
     }
 
