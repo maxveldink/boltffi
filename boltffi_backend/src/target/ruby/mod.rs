@@ -48,7 +48,8 @@ pub struct RubyHost {
     version: Option<String>,
     library: Option<String>,
     cargo_manifest: Option<String>,
-    cargo_features: String,
+    active_features: String,
+    feature_args: Vec<String>,
 }
 
 impl RubyHost {
@@ -90,12 +91,13 @@ impl RubyHost {
         self
     }
 
-    /// Records the cargo features that the binding expansion resolved, comma
-    /// separated. The generated `extconf.rb` builds the crate with exactly
-    /// these features, so the library exports every function the extension
-    /// calls.
-    pub fn cargo_features(mut self, features: impl Into<String>) -> Self {
-        self.cargo_features = features.into();
+    /// Records the cargo feature selection of the binding expansion: the
+    /// active features, comma separated, and the cargo arguments that
+    /// selected them. The generated `extconf.rb` replays the arguments, so
+    /// the library exports every function the extension calls.
+    pub fn cargo_features(mut self, active: impl Into<String>, arguments: Vec<String>) -> Self {
+        self.active_features = active.into();
+        self.feature_args = arguments;
         self
     }
 
@@ -269,7 +271,8 @@ impl host::HostBackend for RubyHost {
             module: &module,
             artifact: &artifact,
             cargo_manifest: self.cargo_manifest.as_deref(),
-            cargo_features: &self.cargo_features,
+            active_features: &self.active_features,
+            feature_args: &self.feature_args,
             crate_name: &crate_name,
         };
         let source = GeneratedFile::new(
@@ -385,7 +388,10 @@ mod tests {
             .expect("valid module")
             .native_library("checkout_engine")
             .cargo_manifest("../../Cargo.toml")
-            .cargo_features("default,ffi");
+            .cargo_features(
+                "default,ffi",
+                vec!["--features".to_owned(), "checkout-engine/ffi".to_owned()],
+            );
         let output = render(host, "#[export] pub fn ping() -> bool { true }");
 
         let paths = output

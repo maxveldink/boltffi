@@ -534,11 +534,7 @@ fn generate_ruby(config: &Config, options: &GenerateOptions) -> Result<()> {
     expansion
         .generation()
         .coverage_mode(CoverageMode::Partial)
-        .ruby_host(ruby_host(
-            config,
-            expansion.artifact_name(),
-            expansion.features(),
-        )?)
+        .ruby_host(ruby_host(config, &expansion)?)
         .render(target)
         .map_err(|error| generation_error(target.name(), error))
         .and_then(|output| {
@@ -550,12 +546,12 @@ fn generate_ruby(config: &Config, options: &GenerateOptions) -> Result<()> {
 }
 
 /// Builds the Ruby host from `[targets.ruby]`, the Rust library artifact, and
-/// the cargo features the binding expansion resolved.
-pub(crate) fn ruby_host(config: &Config, artifact_name: &str, features: &str) -> Result<RubyHost> {
+/// the cargo feature selection of the binding expansion.
+pub(crate) fn ruby_host(config: &Config, expansion: &BindingExpansion) -> Result<RubyHost> {
     let ruby = &config.targets.ruby;
     let host = RubyHost::new()
-        .native_library(artifact_name)
-        .cargo_features(features)
+        .native_library(expansion.artifact_name())
+        .cargo_features(expansion.features(), expansion.feature_args())
         .version(ruby.version.clone());
     let host = match &ruby.module_name {
         Some(module) => host.module_name(module).map_err(|error| {

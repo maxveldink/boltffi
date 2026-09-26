@@ -799,7 +799,7 @@ The gem name also sets the extension stem, `checkout_engine`. Load the extension
 
 ### Source Builds
 
-Set `cargo_manifest` to let the generated `extconf.rb` build the crate when the gem has no prebuilt static library. The build turns on the cargo features that `boltffi generate` resolved. The path is relative to the generated `ext/<stem>/` directory:
+Set `cargo_manifest` to let the generated `extconf.rb` build the crate when the gem has no prebuilt static library. The build replays the cargo feature arguments that `boltffi generate` used. The path is relative to the generated `ext/<stem>/` directory:
 
 ```toml
 [targets.ruby]

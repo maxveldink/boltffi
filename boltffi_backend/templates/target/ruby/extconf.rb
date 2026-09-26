@@ -22,10 +22,11 @@ module BoltFFIExtconf
   ARTIFACT = {{ artifact }}
   EXTENSION = {{ extension }}
   DEFAULT_MANIFEST = {% if let Some(manifest) = manifest %}File.expand_path({{ manifest }}, __dir__){% else %}nil{% endif %}
-  # The cargo features that `boltffi generate` resolved, comma separated. A
-  # cargo build turns on exactly these, so the library exports every function
-  # this extension calls.
-  FEATURES = {{ features }}
+  # The cargo feature selection that `boltffi generate` used, and the active
+  # features it produced. A cargo build replays the selection, so the library
+  # exports every function this extension calls.
+  CARGO_FEATURE_ARGS = [{{ feature_args|join(", ") }}].freeze
+  ACTIVE_FEATURES = {{ active_features }}
 
   class << self
     def static_library
@@ -66,13 +67,12 @@ module BoltFFIExtconf
         "BOLTFFI_BINDING_EXPANSION_ROOT" => File.dirname(manifest),
         "BOLTFFI_BINDING_EXPANSION_SOURCE" => library["src_path"],
         "BOLTFFI_BINDING_EXPANSION_SURFACE" => "native",
-        "BOLTFFI_BINDING_METADATA_FEATURES" => FEATURES,
+        "BOLTFFI_BINDING_METADATA_FEATURES" => ACTIVE_FEATURES,
       }
       command = [
-        cargo, "rustc", "--lib", "--release", "--crate-type", "staticlib", "--no-default-features",
+        cargo, "rustc", "--lib", "--release", "--crate-type", "staticlib", *CARGO_FEATURE_ARGS,
         "--manifest-path", manifest, "--message-format", "json-render-diagnostics",
       ]
-      command.push("--features", FEATURES) unless FEATURES.empty?
       command << "--locked" if File.exist?(File.join(metadata["workspace_root"], "Cargo.lock"))
       command.push("--", "--cfg", "boltffi_binding_expansion", "--print", "native-static-libs")
 

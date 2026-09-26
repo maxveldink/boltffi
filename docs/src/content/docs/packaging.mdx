@@ -950,7 +950,7 @@ The static library matches the machine that ran `pack ruby`, so this gem install
 
 ### Building from source
 
-`extconf.rb` looks for the static library in this order: the `BOLTFFI_RUBY_STATIC_LIBRARY` path, then `lib<library>.a` beside it, then a cargo build of the crate at `BOLTFFI_RUBY_CARGO_MANIFEST` or at [`cargo_manifest`](/docs/configuration#ruby-configuration). The cargo build uses the same binding expansion as `pack ruby` and the cargo features that `boltffi generate` resolved, so a source gem that ships the crate compiles with only Rust and a C compiler.
+`extconf.rb` looks for the static library in this order: the `BOLTFFI_RUBY_STATIC_LIBRARY` path, then `lib<library>.a` beside it, then a cargo build of the crate at `BOLTFFI_RUBY_CARGO_MANIFEST` or at [`cargo_manifest`](/docs/configuration#ruby-configuration). The cargo build uses the same binding expansion as `pack ruby` and replays the cargo feature arguments that `boltffi generate` used, so a source gem that ships the crate compiles with only Rust and a C compiler.
 
 ### Source-only generation
 
