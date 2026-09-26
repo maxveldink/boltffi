@@ -45,8 +45,10 @@ Arguments are checked before Rust runs:
 - An integer argument must be an `Integer` in the range of the Rust type. `1.5` raises `TypeError` and `-1` for a `u32` raises `RangeError`.
 - A float argument accepts `Float` and `Integer`.
 - A `bool` argument accepts only `true` and `false`.
-- A string argument must be valid UTF-8. An ASCII-only string in another ASCII-compatible encoding passes. Other strings raise `ArgumentError` or `Encoding::CompatibilityError`; transcode them with `String#encode` first.
-- A record argument must be an instance of its `Data` class.
+- A string argument must be a `String` with valid UTF-8. An ASCII-only string in another ASCII-compatible encoding passes. Other strings raise `ArgumentError` or `Encoding::CompatibilityError`; transcode them with `String#encode` first.
+- An array, hash, or record argument must be an `Array`, a `Hash`, or an instance of its `Data` class.
+
+The checks read each value's type and never call a conversion method such as `to_str`, `to_ary`, or `to_hash`, so no Ruby code runs while the extension encodes an argument. If Rust still rejects an encoded argument, the call raises `ArgumentError` with Rust's message. For example, a `Hash` that compares by identity can hold two equal keys, which a Rust map rejects.
 
 ## Records
 
