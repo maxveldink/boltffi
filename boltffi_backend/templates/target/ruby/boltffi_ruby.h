@@ -354,7 +354,7 @@ static inline VALUE boltffi_ruby_decode_owned(FfiBuf_u8 buffer, boltffi_ruby_dec
  * the failure raises instead of returning that zero value. `result` is the
  * buffer the call returned, or NULL; it is freed before the raise.
  */
-static void boltffi_ruby_check_arguments(FfiBuf_u8 *result) {
+BOLTFFI_RUBY_MAYBE_UNUSED static void boltffi_ruby_check_arguments(FfiBuf_u8 *result) {
     FfiString message = { NULL, 0, 0 };
     boltffi_last_error_message(&message);
     if (message.len == 0) {
@@ -382,9 +382,9 @@ static void boltffi_ruby_check_arguments(FfiBuf_u8 *result) {
  * Small arguments stay in `inline_bytes` on the C stack. A larger argument
  * moves into `heap`, a hidden Ruby String the GC owns, so a raise in the
  * middle of encoding leaks nothing. `ObjectSpace` cannot find a hidden
- * object, so no Ruby code can change the bytes. The writer lives on the C stack, so the GC finds
- * and pins `heap` while the writer is in scope. Call `RB_GC_GUARD` on `heap`
- * after the native call that reads the bytes.
+ * object, so no Ruby code can change the bytes. The writer lives on the C
+ * stack, so the GC finds and pins `heap` while the writer is in scope. Call
+ * `RB_GC_GUARD` on `heap` after the native call that reads the bytes.
  */
 typedef struct {
     uint8_t *ptr;

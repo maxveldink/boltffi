@@ -99,7 +99,10 @@ impl Record {
         };
         Ok(Self {
             symbols,
-            members: Registration::from_declaration(declaration)?.members,
+            members: field_keys(declaration)?
+                .into_iter()
+                .map(member)
+                .collect::<Result<Vec<_>>>()?,
             body,
             unbound_methods: !declaration.methods().is_empty()
                 || !declaration.initializers().is_empty(),
@@ -179,18 +182,12 @@ impl Record {
 }
 
 impl Registration {
+    /// Builds the registration and rejects two fields that share a member.
     pub fn from_declaration(declaration: &RecordDecl<Native>) -> Result<Self> {
-        let keys: Vec<&FieldKey> = match declaration {
-            RecordDecl::Direct(record) => record.fields().iter().map(|field| field.key()).collect(),
-            RecordDecl::Encoded(record) => {
-                record.fields().iter().map(|field| field.key()).collect()
-            }
-            _ => return unsupported("unknown record declaration"),
-        };
         let constant = Name::new(declaration.name()).constant()?;
         // `Data.define` raises at load time for a duplicate member.
         let mut scope = NameScope::new(format!("record `{constant}` members"));
-        let members = keys
+        let members = field_keys(declaration)?
             .into_iter()
             .map(|key| {
                 let member = member(key)?;
@@ -205,6 +202,14 @@ impl Registration {
             subject: format!("record `{}`", spelling(declaration.name())),
         })
     }
+}
+
+fn field_keys(declaration: &RecordDecl<Native>) -> Result<Vec<&FieldKey>> {
+    Ok(match declaration {
+        RecordDecl::Direct(record) => record.fields().iter().map(|field| field.key()).collect(),
+        RecordDecl::Encoded(record) => record.fields().iter().map(|field| field.key()).collect(),
+        _ => return unsupported("unknown record declaration"),
+    })
 }
 
 fn field_subject(key: &FieldKey) -> String {
