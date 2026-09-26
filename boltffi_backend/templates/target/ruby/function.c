@@ -22,5 +22,8 @@ static VALUE {{ function.wrapper }}({{ function.signature() }}) {
 {%- for statement in function.cleanup %}
     {{ statement }}
 {%- endfor %}
+{%- if let Some(check) = function.check %}
+    {{ check }}
+{%- endif %}
     return {{ function.result }};
 }

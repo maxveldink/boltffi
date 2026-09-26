@@ -79,6 +79,16 @@ class ConversionsTest < Minitest::Test
     assert_raises(RangeError) { Demo.echo_vec_u32([1, -1]) }
   end
 
+  def test_an_argument_that_rust_rejects_raises_instead_of_returning_a_zero_value
+    duplicates = {}.compare_by_identity
+    duplicates["key".dup] = [1]
+    duplicates["key".dup] = [2]
+
+    error = assert_raises(ArgumentError) { Demo.echo_hash_map(duplicates) }
+    assert_match(/rejected an argument.*DuplicateMapKey/, error.message)
+    assert_equal({ "key" => [3] }, Demo.echo_hash_map({ "key" => [3] }))
+  end
+
   def test_records_are_frozen_data_values
     point = Demo.make_point(1.0, 2.0)
 

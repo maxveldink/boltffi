@@ -321,6 +321,30 @@ static inline VALUE boltffi_ruby_decode_owned(FfiBuf_u8 buffer, boltffi_ruby_dec
     return rb_ensure(boltffi_ruby_owned_decode, (VALUE)&owned, boltffi_ruby_owned_free, (VALUE)&owned);
 }
 
+/*
+ * Rust reports an argument it cannot decode through the last-error slot and
+ * returns a zero value. Each call that sends encoded bytes checks the slot, so
+ * the failure raises instead of returning that zero value. `result` is the
+ * buffer the call returned, or NULL; it is freed before the raise.
+ */
+static void boltffi_ruby_check_arguments(FfiBuf_u8 *result) {
+    FfiString message = { NULL, 0, 0 };
+    boltffi_last_error_message(&message);
+    if (message.len == 0) {
+        boltffi_free_string(message);
+        return;
+    }
+    if (result != NULL) {
+        boltffi_free_buf(*result);
+    }
+    char text[256];
+    size_t len = message.len < sizeof(text) - 1 ? (size_t)message.len : sizeof(text) - 1;
+    memcpy(text, message.ptr, len);
+    text[len] = '\0';
+    boltffi_free_string(message);
+    rb_raise(rb_eArgError, "BoltFFI: the native library rejected an argument: %s", text);
+}
+
 /* ---- writing values for Rust ------------------------------------------- */
 
 #define BOLTFFI_RUBY_WRITER_INLINE_CAPACITY 128

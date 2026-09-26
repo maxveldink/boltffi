@@ -194,6 +194,7 @@ static VALUE boltffi_ruby_fn_boltffi_function_demo_echo_shape(VALUE self, VALUE 
     }
     FfiBuf_u8 boltffi_result = boltffi_function_demo_echo_shape(boltffi_writer_0.ptr, boltffi_writer_0.len);
     RB_GC_GUARD(boltffi_writer_0.heap);
+    boltffi_ruby_check_arguments(&boltffi_result);
     return boltffi_ruby_decode_owned(boltffi_result, boltffi_ruby_fn_boltffi_function_demo_echo_shape_decode);
 }
 

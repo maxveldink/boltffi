@@ -40,6 +40,7 @@ pub struct Function {
     setup: Vec<String>,
     call: String,
     cleanup: Vec<String>,
+    check: Option<String>,
     result: String,
     helpers: Vec<String>,
     decoder: Option<Decoder>,
@@ -65,6 +66,8 @@ struct Argument {
     values: Vec<String>,
     cleanup: Vec<String>,
     helpers: Vec<String>,
+    /// Rust decodes this argument from encoded bytes, so decoding can fail.
+    encoded: bool,
 }
 
 impl Function {
@@ -130,6 +133,10 @@ impl Function {
             context,
         )?;
         let (call, result) = conversion.call(&native_call)?;
+        let check = arguments
+            .iter()
+            .any(|argument| argument.encoded)
+            .then(|| conversion.check());
         let mut setup = Vec::new();
         let mut cleanup = Vec::new();
         let mut helpers = Vec::new();
@@ -144,6 +151,7 @@ impl Function {
             setup,
             call,
             cleanup,
+            check,
             result,
             helpers,
             decoder: conversion.decoder,
@@ -331,6 +339,7 @@ impl Argument {
             values: vec![format!("{writer}.ptr"), format!("{writer}.len")],
             cleanup: vec![format!("RB_GC_GUARD({writer}.heap);")],
             helpers,
+            encoded: true,
         }
     }
 
@@ -354,6 +363,7 @@ impl Argument {
             values: vec![format!("{writer}.ptr"), format!("{writer}.len")],
             cleanup: vec![format!("RB_GC_GUARD({writer}.heap);")],
             helpers: Vec::new(),
+            encoded: true,
         })
     }
 
@@ -409,7 +419,7 @@ impl Argument {
             ],
             values,
             cleanup: vec![format!("RB_ALLOCV_END(boltffi_storage_{index});")],
-            helpers: Vec::new(),
+            ..Self::default()
         })
     }
 }
@@ -526,6 +536,16 @@ impl ReturnConversion {
             },
             decoder: Some(Decoder { name, body }),
         })
+    }
+
+    /// Returns the statement that raises when Rust rejected an argument.
+    fn check(&self) -> String {
+        match self.kind {
+            ReturnKind::Owned { .. } => "boltffi_ruby_check_arguments(&boltffi_result);".to_owned(),
+            ReturnKind::Void | ReturnKind::Direct { .. } => {
+                "boltffi_ruby_check_arguments(NULL);".to_owned()
+            }
+        }
     }
 
     /// Returns the call statement and the Ruby result expression.
