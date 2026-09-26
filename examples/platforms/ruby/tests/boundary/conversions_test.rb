@@ -47,6 +47,19 @@ class ConversionsTest < Minitest::Test
     assert_raises(TypeError) { Demo.echo_string(:symbol) }
   end
 
+  # Encoding runs no Ruby code: a `to_str` method could change a Hash or an
+  # Array after the extension wrote its size.
+  def test_strings_are_strict_and_never_call_to_str
+    convertible = Object.new
+    def convertible.to_str = raise("to_str must not run")
+    subclass = Class.new(String)
+
+    assert_raises(TypeError) { Demo.echo_string(convertible) }
+    assert_raises(TypeError) { Demo.echo_bytes(convertible) }
+    assert_raises(TypeError) { Demo.echo_hash_map({ convertible => [1] }) }
+    assert_equal("text", Demo.echo_string(subclass.new("text")))
+  end
+
   def test_ascii_only_strings_pass_in_any_ascii_compatible_encoding
     assert_equal("abc", Demo.echo_string("abc".b))
     assert_equal("abc", Demo.echo_string("abc".encode("US-ASCII")))

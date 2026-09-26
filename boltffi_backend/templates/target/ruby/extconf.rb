@@ -125,7 +125,7 @@ module BoltFFIExtconf
       end
       linked = $LIBS.split
       native = metadata.fetch("native_static_libraries").reject { |flag| flag.start_with?("-l") && linked.include?(flag) }
-      $LIBS << " #{native.join(" ")}"
+      $LIBS << " #{native.map(&:shellescape).join(" ")}"
       export_only_entry_point
       create_makefile("#{EXTENSION}/#{EXTENSION}")
     end

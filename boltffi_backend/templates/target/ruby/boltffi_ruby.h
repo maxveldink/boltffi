@@ -2,16 +2,19 @@
  * BoltFFI Ruby runtime. Generated extensions include this file.
  *
  * Every value crosses the boundary as a plain Ruby object. The helpers here
- * follow four rules:
+ * follow five rules:
  *
  * 1. Convert and check every Ruby argument before Rust runs. A Ruby exception
  *    is a longjmp, so C code must not own memory that a raise would skip.
  * 2. Encode arguments into a writer that starts on the C stack and moves into
- *    a GC-owned Ruby String when it grows. A raise leaks nothing.
+ *    a hidden, GC-owned Ruby String when it grows. A raise leaks nothing.
  * 3. Free every buffer that Rust returns exactly once, also when decoding
  *    raises. `boltffi_ruby_decode_owned` runs the decoder under `rb_ensure`.
  * 4. Send Rust only valid UTF-8. Rust builds `String` values from these bytes
  *    without a second check.
+ * 5. Run no Ruby code while an argument is encoded. Each check reads the type
+ *    and never calls a conversion method such as `to_str`. Ruby code could
+ *    change a Hash or an Array after its size is written.
  */
 #ifndef BOLTFFI_RUBY_H
 #define BOLTFFI_RUBY_H
@@ -127,6 +130,14 @@ static inline float boltffi_ruby_to_f32(VALUE value) {
     return (float)result;
 }
 
+/* Strings are strict: an object with `to_str` raises instead of converting. */
+static inline VALUE boltffi_ruby_expect_string(VALUE value) {
+    if (!RB_TYPE_P(value, T_STRING)) {
+        boltffi_ruby_wrong_type(value, "String");
+    }
+    return value;
+}
+
 /*
  * Returns a String whose bytes are valid UTF-8.
  *
@@ -135,7 +146,7 @@ static inline float boltffi_ruby_to_f32(VALUE value) {
  * other string raises: transcoding is the caller's choice, not ours.
  */
 static inline VALUE boltffi_ruby_utf8(VALUE value) {
-    StringValue(value);
+    boltffi_ruby_expect_string(value);
     int encoding = ENCODING_GET(value);
     int coderange = rb_enc_str_coderange(value);
     if (coderange == ENC_CODERANGE_BROKEN) {
@@ -369,8 +380,9 @@ static void boltffi_ruby_check_arguments(FfiBuf_u8 *result) {
  * Bytes for one encoded argument.
  *
  * Small arguments stay in `inline_bytes` on the C stack. A larger argument
- * moves into `heap`, a Ruby String the GC owns, so a raise in the middle of
- * encoding leaks nothing. The writer lives on the C stack, so the GC finds
+ * moves into `heap`, a hidden Ruby String the GC owns, so a raise in the
+ * middle of encoding leaks nothing. `ObjectSpace` cannot find a hidden
+ * object, so no Ruby code can change the bytes. The writer lives on the C stack, so the GC finds
  * and pins `heap` while the writer is in scope. Call `RB_GC_GUARD` on `heap`
  * after the native call that reads the bytes.
  */
@@ -399,7 +411,7 @@ static void boltffi_ruby_writer_grow(boltffi_ruby_writer *writer, uintptr_t addi
         capacity = capacity > (uintptr_t)LONG_MAX / 2 ? (uintptr_t)LONG_MAX : capacity * 2;
     }
     if (writer->heap == Qfalse) {
-        VALUE heap = rb_str_new(NULL, (long)capacity);
+        VALUE heap = rb_str_tmp_new((long)capacity);
         memcpy(RSTRING_PTR(heap), writer->ptr, writer->len);
         writer->heap = heap;
     } else {
@@ -477,8 +489,7 @@ static inline void boltffi_ruby_write_string(boltffi_ruby_writer *writer, VALUE 
 }
 
 static inline void boltffi_ruby_write_binary(boltffi_ruby_writer *writer, VALUE value) {
-    StringValue(value);
-    boltffi_ruby_write_prefixed(writer, value);
+    boltffi_ruby_write_prefixed(writer, boltffi_ruby_expect_string(value));
 }
 
 #endif
