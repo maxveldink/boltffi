@@ -2,12 +2,20 @@
 //!
 //! The Ruby target renders a C extension that links the Rust static library
 //! and calls the shared C ABI (`CBridge`) directly. Every value crosses as a
-//! plain Ruby object. This scaffold declares the host, its syntax, and its
-//! naming rules; the renderer and the CLI wiring follow in later changes.
+//! plain Ruby object: `Integer`, `Float`, `true`/`false`, `String`, `Array`,
+//! `Hash`, `nil`, and one frozen `Data` class per record. The extension builds
+//! those objects eagerly, so Ruby code, and YJIT, see ordinary Ruby values.
+//!
+//! The target renders synchronous free functions and records. Enums, classes,
+//! callbacks, streams, async functions, constants, custom types, and fallible
+//! functions are not supported yet.
 
+mod codec;
 /// Ruby spellings of binding names.
 pub mod name_style;
+mod render;
 mod support;
+mod symbol;
 /// Ruby syntax fragments.
 pub mod syntax;
 
@@ -25,17 +33,39 @@ use crate::{
     },
 };
 
-use self::{name_style::extension_stem, support::unsupported};
+use self::{
+    name_style::{default_module, extension_stem},
+    render::{extension, function::Function, record::Record},
+    support::unsupported,
+    syntax::ConstantPath,
+};
 
 /// Ruby host renderer paired with the shared C ABI bridge.
 #[derive(Clone, Debug, Default, Eq, Hash, PartialEq)]
 #[non_exhaustive]
-pub struct RubyHost;
+pub struct RubyHost {
+    module: Option<ConstantPath>,
+    gem: Option<String>,
+}
 
 impl RubyHost {
     /// Creates a Ruby host renderer.
     pub fn new() -> Self {
-        Self
+        Self::default()
+    }
+
+    /// Selects the Ruby module that holds the functions and records, such as
+    /// `MyLib::Native`.
+    pub fn module_name(mut self, module: &str) -> Result<Self> {
+        self.module = Some(ConstantPath::parse(module)?);
+        Ok(self)
+    }
+
+    /// Selects the gem name. The extension stem is the gem name in
+    /// `snake_case`.
+    pub fn gem_name(mut self, gem: impl Into<String>) -> Self {
+        self.gem = Some(gem.into());
+        self
     }
 
     /// Creates the backend target stack for this Ruby host.
@@ -43,9 +73,26 @@ impl RubyHost {
     /// Ruby calls the C ABI directly, so the stack is `CBridge` alone. The
     /// bridge writes its header beside the extension source.
     pub fn into_target(self, bindings: &Bindings<Native>) -> Result<Target<Self, CBridge>> {
-        let stem = extension_stem(&bindings.package().name().as_path_string());
-        let header = format!("ext/{stem}/boltffi.h");
+        let header = format!("{}/boltffi.h", extension::directory(&self.stem(bindings)));
         Ok(Target::new(self, CBridge::new(header)?))
+    }
+
+    /// The gem name: the configured name, or the Cargo package name.
+    fn gem(&self, bindings: &Bindings<Native>) -> String {
+        self.gem
+            .clone()
+            .unwrap_or_else(|| bindings.package().name().as_path_string())
+    }
+
+    fn stem(&self, bindings: &Bindings<Native>) -> String {
+        extension_stem(&self.gem(bindings))
+    }
+
+    fn module(&self, bindings: &Bindings<Native>) -> Result<ConstantPath> {
+        self.module
+            .clone()
+            .map(Ok)
+            .unwrap_or_else(|| default_module(bindings.package().name()))
     }
 }
 
@@ -59,16 +106,33 @@ impl host::HostBackend for RubyHost {
     }
 
     fn binding_capabilities(&self) -> HostCapabilities {
-        const REASON: &str = "not yet implemented in the Ruby host";
         HostCapabilities::new()
-            .unsupported(BindingCapability::Records, REASON)
-            .unsupported(BindingCapability::Functions, REASON)
-            .unsupported(BindingCapability::Enums, REASON)
-            .unsupported(BindingCapability::Classes, REASON)
-            .unsupported(BindingCapability::Callbacks, REASON)
-            .unsupported(BindingCapability::Streams, REASON)
-            .unsupported(BindingCapability::Constants, REASON)
-            .unsupported(BindingCapability::CustomTypes, REASON)
+            .stable(BindingCapability::Records)
+            .stable(BindingCapability::Functions)
+            .unsupported(
+                BindingCapability::Enums,
+                "enums are not implemented in the Ruby host",
+            )
+            .unsupported(
+                BindingCapability::Classes,
+                "classes are not implemented in the Ruby host",
+            )
+            .unsupported(
+                BindingCapability::Callbacks,
+                "callbacks are not implemented in the Ruby host",
+            )
+            .unsupported(
+                BindingCapability::Streams,
+                "streams are not implemented in the Ruby host",
+            )
+            .unsupported(
+                BindingCapability::Constants,
+                "constants are not implemented in the Ruby host",
+            )
+            .unsupported(
+                BindingCapability::CustomTypes,
+                "custom types are not implemented in the Ruby host",
+            )
     }
 
     fn bridge_capabilities(&self) -> CapabilityRequirements<BridgeCapability> {
@@ -77,11 +141,11 @@ impl host::HostBackend for RubyHost {
 
     fn record(
         &self,
-        _decl: &RecordDecl<Self::Surface>,
-        _bridge: &Self::Bridge,
-        _context: &RenderContext<Self::Surface>,
+        decl: &RecordDecl<Self::Surface>,
+        bridge: &Self::Bridge,
+        context: &RenderContext<Self::Surface>,
     ) -> Result<Emitted> {
-        unsupported("record")
+        Record::from_declaration(decl, bridge, context)?.render()
     }
 
     fn enumeration(
@@ -95,11 +159,11 @@ impl host::HostBackend for RubyHost {
 
     fn function(
         &self,
-        _decl: &FunctionDecl<Self::Surface>,
-        _bridge: &Self::Bridge,
-        _context: &RenderContext<Self::Surface>,
+        decl: &FunctionDecl<Self::Surface>,
+        bridge: &Self::Bridge,
+        context: &RenderContext<Self::Surface>,
     ) -> Result<Emitted> {
-        unsupported("function")
+        Function::from_declaration(decl, bridge, context)?.render()
     }
 
     fn class(
@@ -149,15 +213,277 @@ impl host::HostBackend for RubyHost {
 
     fn assemble<'decl>(
         &self,
-        _bindings: &Bindings<Self::Surface>,
+        bindings: &Bindings<Self::Surface>,
         _bridge: &Self::Bridge,
         _context: &RenderContext<Self::Surface>,
-        _declarations: Vec<RenderedDeclaration<'decl, Self::Surface>>,
+        declarations: Vec<RenderedDeclaration<'decl, Self::Surface>>,
     ) -> Result<GeneratedOutput> {
-        // Every declaration is unsupported until the renderer lands, so there
-        // is nothing to assemble yet.
-        Ok(GeneratedOutput::new(Vec::new(), Vec::new()))
+        let files = extension::render(&self.stem(bindings), &self.module(bindings)?, declarations)?;
+        Ok(GeneratedOutput::new(files, Vec::new()))
     }
 }
 
 impl sealed::HostBackend for RubyHost {}
+
+#[cfg(test)]
+mod tests {
+    use std::path::Path;
+
+    use boltffi_ast::PackageInfo;
+    use boltffi_binding::{Bindings, Native, lower};
+
+    use crate::core::{Error, GeneratedOutput};
+
+    use super::RubyHost;
+
+    fn bindings(source: &str) -> Bindings<Native> {
+        let source = boltffi_scan::scan_file(
+            syn::parse_str(source).expect("valid source"),
+            PackageInfo::new("demo", Some("1.2.3".to_owned())),
+        )
+        .expect("source should scan");
+        lower::<Native>(&source).expect("source should lower")
+    }
+
+    fn render(host: RubyHost, source: &str) -> GeneratedOutput {
+        let bindings = bindings(source);
+        host.into_target(&bindings)
+            .expect("Ruby target")
+            .render(&bindings)
+            .expect("Ruby target should render")
+    }
+
+    fn file<'output>(output: &'output GeneratedOutput, path: &str) -> &'output str {
+        output
+            .files()
+            .iter()
+            .find(|file| file.path().as_path() == Path::new(path))
+            .map(|file| file.contents())
+            .unwrap_or_else(|| panic!("generated file {path}"))
+    }
+
+    #[test]
+    fn ruby_extension_for_scalar_string_and_collection_functions() {
+        let output = render(
+            RubyHost::new(),
+            r#"
+            use std::collections::HashMap;
+
+            #[export]
+            pub fn add(left: i32, right: i32) -> i32 { left + right }
+
+            #[export]
+            pub fn greet(name: String) -> String { format!("hi {name}") }
+
+            #[export]
+            pub fn total(values: Vec<u64>) -> u64 { values.iter().sum() }
+
+            #[export]
+            pub fn tags(names: Vec<String>) -> HashMap<String, Vec<i32>> { HashMap::new() }
+
+            #[export]
+            pub fn half(value: Option<i32>) -> Option<f64> { value.map(|value| value as f64 / 2.0) }
+
+            #[export]
+            pub fn noop() {}
+            "#,
+        );
+
+        insta::assert_snapshot!("ruby_functions", file(&output, "ext/demo/demo.c"));
+    }
+
+    #[test]
+    fn ruby_extension_for_direct_and_encoded_records() {
+        let output = render(
+            RubyHost::new(),
+            r#"
+            use std::collections::HashMap;
+
+            #[data]
+            pub struct Point { pub x: f64, pub y: f64 }
+
+            #[data]
+            pub struct Shape { pub name: String, pub hash: u32, pub points: Vec<Point>, pub center: Option<Point>, pub labels: HashMap<String, String> }
+
+            #[export]
+            pub fn echo_point(point: Point) -> Point { point }
+
+            #[export]
+            pub fn points(count: u32) -> Vec<Point> { Vec::new() }
+
+            #[export]
+            pub fn echo_shape(shape: Shape) -> Shape { shape }
+            "#,
+        );
+
+        insta::assert_snapshot!("ruby_records", file(&output, "ext/demo/demo.c"));
+    }
+
+    #[test]
+    fn ruby_extension_files_use_the_configured_gem_and_module() {
+        let host = RubyHost::new()
+            .gem_name("my-lib")
+            .module_name("MyLib::Native")
+            .expect("valid module");
+        let output = render(host, "#[export] pub fn ping() -> bool { true }");
+
+        let paths = output
+            .files()
+            .iter()
+            .map(|file| file.path().as_path().to_string_lossy().into_owned())
+            .collect::<Vec<_>>();
+        assert_eq!(
+            paths,
+            [
+                "ext/my_lib/boltffi.h",
+                "ext/my_lib/my_lib.c",
+                "ext/my_lib/boltffi_ruby.h",
+            ]
+        );
+        assert!(file(&output, "ext/my_lib/my_lib.c").contains(
+            "RUBY_FUNC_EXPORTED void Init_my_lib(void) {\n    VALUE boltffi_module = rb_define_module(\"MyLib\");\n    boltffi_module = rb_define_module_under(boltffi_module, \"Native\");"
+        ));
+    }
+
+    #[test]
+    fn ruby_partial_render_skips_unsupported_declarations_with_coverage_entries() {
+        let source = r#"
+            #[data]
+            pub enum Mode { Fast, Slow }
+
+            #[export]
+            pub fn current_mode() -> Mode { Mode::Fast }
+
+            #[export]
+            pub fn parse(text: String) -> Result<i32, String> { text.parse().map_err(|_| text) }
+
+            #[export]
+            pub fn ok() -> bool { true }
+
+            #[export]
+            pub fn flatten(value: Option<Option<i32>>) -> Option<i32> { value.flatten() }
+
+            #[export]
+            pub fn keep(values: Option<Vec<Option<i32>>>) -> Option<Vec<Option<i32>>> { values }
+        "#;
+        let bindings = bindings(source);
+        let output = RubyHost::new()
+            .into_target(&bindings)
+            .expect("Ruby target")
+            .render_partial(&bindings)
+            .expect("partial render");
+
+        let reasons = output
+            .coverage()
+            .unsupported()
+            .iter()
+            .map(|entry| format!("{}: {}", entry.declaration().name(), entry.reason()))
+            .collect::<Vec<_>>();
+        assert_eq!(
+            reasons,
+            [
+                "mode: enums are not implemented in the Ruby host",
+                "current::mode: enum return",
+                "parse: fallible function",
+                "flatten: nested optional",
+            ]
+        );
+        let extension = file(&output, "ext/demo/demo.c");
+        assert!(extension.contains("\"ok\""));
+        // An optional inside a vector inside an optional keeps `None` and
+        // `Some(None)` apart, so it is supported.
+        assert!(extension.contains("\"keep\""));
+        assert!(!extension.contains("\"parse\""));
+        assert!(!extension.contains("\"current_mode\""));
+    }
+
+    #[test]
+    fn ruby_complete_render_rejects_unsupported_declarations() {
+        let bindings = bindings(
+            r#"
+            #[export]
+            pub fn parse(text: String) -> Result<i32, String> { text.parse().map_err(|_| text) }
+            "#,
+        );
+        let error = RubyHost::new()
+            .into_target(&bindings)
+            .expect("Ruby target")
+            .render(&bindings)
+            .expect_err("fallible functions are unsupported");
+
+        assert!(matches!(
+            error,
+            Error::UnsupportedTarget {
+                target: "ruby",
+                shape: "fallible function"
+            }
+        ));
+    }
+
+    #[test]
+    fn ruby_escaped_function_names_cannot_collide() {
+        let bindings = bindings(
+            r#"
+            #[export]
+            pub fn freeze() {}
+
+            #[export]
+            pub fn freeze_() {}
+            "#,
+        );
+        let error = RubyHost::new()
+            .into_target(&bindings)
+            .expect("Ruby target")
+            .render(&bindings)
+            .expect_err("both functions want freeze_");
+
+        assert!(matches!(
+            error,
+            Error::RubyNameCollision { ref name, .. } if name == "freeze_"
+        ));
+    }
+
+    #[test]
+    fn ruby_record_members_that_escape_to_one_name_collide() {
+        let bindings = bindings(
+            r#"
+            #[data]
+            pub struct Tagged { pub hash: String, pub hash_: String }
+
+            #[export]
+            pub fn tagged(value: Tagged) -> Tagged { value }
+            "#,
+        );
+        let error = RubyHost::new()
+            .into_target(&bindings)
+            .expect("Ruby target")
+            .render(&bindings)
+            .expect_err("both fields want the member hash_");
+
+        assert_eq!(
+            error.to_string(),
+            "ruby name collision in record `Tagged` members: `hash_` is used by field `hash` and field `hash_`"
+        );
+    }
+
+    #[test]
+    fn ruby_functions_with_more_than_fifteen_arguments_use_variadic_arity() {
+        let params = (0..16)
+            .map(|index| format!("a{index}: u8"))
+            .collect::<Vec<_>>()
+            .join(", ");
+        let output = render(
+            RubyHost::new(),
+            &format!("#[export] pub fn wide({params}) -> u8 {{ a15 }}"),
+        );
+        let extension = file(&output, "ext/demo/demo.c");
+
+        assert!(
+            extension.contains(
+                "(int argc, VALUE *argv, VALUE self) {\n    rb_check_arity(argc, 16, 16);"
+            )
+        );
+        assert!(extension.contains("uint8_t boltffi_value_15 = boltffi_ruby_to_u8(argv[15]);"));
+        assert!(extension.contains("\"wide\", boltffi_ruby_fn_boltffi_function_demo_wide, -1);"));
+    }
+}
