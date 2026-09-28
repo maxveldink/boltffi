@@ -75,12 +75,22 @@ pub fn make_none_point() -> Option<Point> {
 #[demo_bench_macros::demo_case(
     "options.complex.status.should_roundtrip_some",
     justification = "Ensure an Option<Status> carrying Some crosses the wire and returns the same enum value.",
-    directions = "Call `options::complex::echo_optional_status` through the generated binding and assert an Option<Status> carrying Some crosses the wire and returns the same enum value."
+    directions = "Call `options::complex::echo_optional_status` through the generated binding and assert an Option<Status> carrying Some crosses the wire and returns the same enum value.",
+    exclude(
+        ruby,
+        reason = ExclusionReason::ImplementationGap,
+        details = "the Ruby target does not support enums yet"
+    )
 )]
 #[demo_bench_macros::demo_case(
     "options.complex.status.should_roundtrip_none",
     justification = "Ensure an Option<Status> carrying None crosses the wire and returns None.",
-    directions = "Call `options::complex::echo_optional_status` through the generated binding and assert an Option<Status> carrying None crosses the wire and returns None."
+    directions = "Call `options::complex::echo_optional_status` through the generated binding and assert an Option<Status> carrying None crosses the wire and returns None.",
+    exclude(
+        ruby,
+        reason = ExclusionReason::ImplementationGap,
+        details = "the Ruby target does not support enums yet"
+    )
 )]
 #[export]
 pub fn echo_optional_status(v: Option<Status>) -> Option<Status> {
@@ -185,22 +195,42 @@ pub fn find_names(count: i32) -> Option<Vec<String>> {
 #[demo_bench_macros::demo_case(
     "options.complex.api_result.should_find_success_variant",
     justification = "Ensure find_api_result returns Some(ApiResult::Success) for code 0.",
-    directions = "Call `options::complex::find_api_result` through the generated binding and assert find_api_result returns Some(ApiResult::Success) for code 0."
+    directions = "Call `options::complex::find_api_result` through the generated binding and assert find_api_result returns Some(ApiResult::Success) for code 0.",
+    exclude(
+        ruby,
+        reason = ExclusionReason::ImplementationGap,
+        details = "the Ruby target does not support enums yet"
+    )
 )]
 #[demo_bench_macros::demo_case(
     "options.complex.api_result.should_find_error_code_variant",
     justification = "Ensure find_api_result returns Some(ApiResult::ErrorCode) for code 1.",
-    directions = "Call `options::complex::find_api_result` through the generated binding and assert find_api_result returns Some(ApiResult::ErrorCode) for code 1."
+    directions = "Call `options::complex::find_api_result` through the generated binding and assert find_api_result returns Some(ApiResult::ErrorCode) for code 1.",
+    exclude(
+        ruby,
+        reason = ExclusionReason::ImplementationGap,
+        details = "the Ruby target does not support enums yet"
+    )
 )]
 #[demo_bench_macros::demo_case(
     "options.complex.api_result.should_find_error_with_data_variant",
     justification = "Ensure find_api_result returns Some(ApiResult::ErrorWithData) for code 2.",
-    directions = "Call `options::complex::find_api_result` through the generated binding and assert find_api_result returns Some(ApiResult::ErrorWithData) for code 2."
+    directions = "Call `options::complex::find_api_result` through the generated binding and assert find_api_result returns Some(ApiResult::ErrorWithData) for code 2.",
+    exclude(
+        ruby,
+        reason = ExclusionReason::ImplementationGap,
+        details = "the Ruby target does not support enums yet"
+    )
 )]
 #[demo_bench_macros::demo_case(
     "options.complex.api_result.should_return_none_for_unknown_code",
     justification = "Ensure find_api_result returns None when the code does not map to an ApiResult variant.",
-    directions = "Call `options::complex::find_api_result` through the generated binding and assert find_api_result returns None when the code does not map to an ApiResult variant."
+    directions = "Call `options::complex::find_api_result` through the generated binding and assert find_api_result returns None when the code does not map to an ApiResult variant.",
+    exclude(
+        ruby,
+        reason = ExclusionReason::ImplementationGap,
+        details = "the Ruby target does not support enums yet"
+    )
 )]
 #[export]
 pub fn find_api_result(code: i32) -> Option<ApiResult> {
@@ -251,12 +281,22 @@ pub fn echo_vec_optional_i32(v: Vec<Option<i32>>) -> Vec<Option<i32>> {
 #[demo_bench_macros::demo_case(
     "options.complex.shape.should_return_radius_for_circle",
     justification = "Ensure radius_if_circle returns Some containing the radius when the Shape data enum is Circle.",
-    directions = "Call `options::complex::radius_if_circle` through the generated binding and assert radius_if_circle returns Some containing the radius when the Shape data enum is Circle."
+    directions = "Call `options::complex::radius_if_circle` through the generated binding and assert radius_if_circle returns Some containing the radius when the Shape data enum is Circle.",
+    exclude(
+        ruby,
+        reason = ExclusionReason::ImplementationGap,
+        details = "the Ruby target does not support enums yet"
+    )
 )]
 #[demo_bench_macros::demo_case(
     "options.complex.shape.should_return_none_for_non_circle",
     justification = "Ensure radius_if_circle returns None when the Shape data enum is not Circle.",
-    directions = "Call `options::complex::radius_if_circle` through the generated binding and assert radius_if_circle returns None when the Shape data enum is not Circle."
+    directions = "Call `options::complex::radius_if_circle` through the generated binding and assert radius_if_circle returns None when the Shape data enum is not Circle.",
+    exclude(
+        ruby,
+        reason = ExclusionReason::ImplementationGap,
+        details = "the Ruby target does not support enums yet"
+    )
 )]
 #[export]
 pub fn radius_if_circle(shape: Shape) -> Option<f64> {

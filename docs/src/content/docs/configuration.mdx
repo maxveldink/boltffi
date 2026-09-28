@@ -772,6 +772,41 @@ boltffi pack python --python python3.12 --python python3.13
 
 If you omit `interpreters`, BoltFFI falls back to the first available default interpreter it finds on the host.
 
+<h2 id="ruby-configuration">Ruby Configuration (experimental)</h2>
+
+The Ruby target writes gem sources to `dist/ruby` by default.
+
+```toml
+experimental = ["ruby"]
+
+[targets.ruby]
+enabled = true
+output = "dist/ruby"
+```
+
+### Gem and Module Names
+
+The gem name defaults to the Cargo package name. The Ruby module defaults to the package name in `UpperCamelCase`. Set both when the generated extension lives inside a larger gem:
+
+```toml
+[targets.ruby]
+enabled = true
+gem_name = "my-lib"
+module_name = "MyLib::Native"
+```
+
+The gem name also sets the extension stem, `my_lib`. Load the extension with `require "my_lib"`.
+
+### Source Builds
+
+Set `cargo_manifest` to let the generated `extconf.rb` build the crate when the gem has no prebuilt static library. The build replays the cargo feature arguments that `boltffi generate` used. The path is relative to the generated `ext/<stem>/` directory:
+
+```toml
+[targets.ruby]
+enabled = true
+cargo_manifest = "../../Cargo.toml"
+```
+
 ## Complete Example
 
 Here's a full configuration for a library that targets all platforms:

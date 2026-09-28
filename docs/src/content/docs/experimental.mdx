@@ -14,6 +14,7 @@ Java, C#, and Python bindings are generally available and no longer require expe
 | Dart target | `dart` | In progress |
 | Kotlin Multiplatform target | `kotlin_multiplatform` | Initial JVM/Android actuals |
 | C target | `c` | Synchronous APIs; see [limits](#c) |
+| Ruby target | `ruby` | Synchronous functions and records; see [limits](#ruby) |
 | TS async streams | `typescript.async_streams` | Functional |
 
 ## Enabling
@@ -63,6 +64,22 @@ C supports synchronous functions and methods, classes, records, enums with or wi
 - [C packaging](/docs/packaging#c-experimental) is host-only. Cross-compilation through Cargo target selection is not supported.
 
 These limits do not exclude records with strings, data enums, options, nested collections, maps, or custom types from synchronous functions. The generated header and skipped-declaration report describe the API available for a particular library.
+
+### Ruby
+
+**Key:** `ruby`
+
+Set `targets.ruby.enabled = true`, then run `boltffi pack ruby --experimental` to write gem sources with the host static library. `boltffi generate ruby --experimental` writes only the sources.
+
+Ruby supports synchronous free functions whose parameters and results are primitives, strings, bytes, vectors, maps, options, tuples, and records. Every value crosses as a plain Ruby object. Add `--deny-skipped` when every exported declaration must have a Ruby binding.
+
+- Enums, classes, callbacks, streams, constants, custom types, and builtin types such as `Duration` are not generated for Ruby.
+- Functions that return `Result` and async functions are skipped.
+- Record methods and initializers are not bound; records are data only.
+- `&mut` parameters are not supported.
+- A nested `Option`, such as `Option<Option<i32>>`, is skipped: Ruby `nil` cannot tell `None` from `Some(None)`.
+- A panic in a synchronous function aborts the process, as in every BoltFFI target. [Catch it in the function](/docs/ruby#panics) to return `nil` instead.
+- [Ruby packaging](/docs/packaging#ruby-experimental) is host-only, and the compiled extension matches one Ruby version. Windows is not supported yet.
 
 ### TypeScript Async Streams
 
