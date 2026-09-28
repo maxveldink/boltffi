@@ -1,8 +1,8 @@
 //! `boltffi pack ruby`: generated gem sources plus the host static library.
 //!
-//! The pack builds the Rust static library through the binding expansion,
-//! copies it into the generated extension directory, and writes its link
-//! metadata beside it. `gem build` or `ruby extconf.rb && make` in that tree
+//! The pack generates the sources and builds the Rust static library from
+//! one binding expansion, copies the library into the generated extension
+//! directory, and writes its link metadata beside it. `gem build` or `ruby extconf.rb && make` in that tree
 //! then needs no cargo.
 
 use std::path::{Path, PathBuf};
@@ -16,10 +16,7 @@ use crate::{
     },
     cargo::Cargo,
     cli::{CliError, Result},
-    commands::{
-        generate::{GenerateOptions, GenerateTarget, run_generate_with_output},
-        pack::PackRubyOptions,
-    },
+    commands::{generate::bindings::render_ruby, pack::PackRubyOptions},
     config::Config,
     pack::{print_cargo_line, resolve_build_cargo_args},
     reporter::Reporter,
@@ -62,16 +59,14 @@ pub(crate) fn pack_ruby(
     }
 
     if options.execution.regenerate && !options.execution.no_build {
+        // The sources and the static library come from one expansion, so
+        // `[cargo.command_args].generate` cannot add a feature the library lacks.
         let step = reporter.step("Generating Ruby bindings");
-        run_generate_with_output(
+        render_ruby(
             config,
-            GenerateOptions {
-                target: GenerateTarget::Ruby,
-                output: Some(config.ruby_output()),
-                experimental: options.experimental,
-                cargo_args: build_cargo_args.clone(),
-                deny_skipped: options.execution.deny_skipped,
-            },
+            &binding_expansion,
+            &config.ruby_output(),
+            options.execution.deny_skipped,
         )?;
         step.finish_success();
     }

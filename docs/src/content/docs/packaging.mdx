@@ -921,6 +921,8 @@ The Rust library must declare the `staticlib` crate type:
 crate-type = ["staticlib", "rlib"]
 ```
 
+`pack ruby` generates the sources with the same cargo arguments that build the static library: `[cargo] global_args`, `[cargo.command_args].build`, and `--cargo-arg`. `[cargo.command_args].generate` does not apply, so the extension never calls a function that the library lacks.
+
 ### Output structure
 
 With the package named `mylib` and output directory `dist/ruby`, the gem sources are:

@@ -530,16 +530,30 @@ fn generate_ruby(config: &Config, options: &GenerateOptions) -> Result<()> {
         .output
         .clone()
         .unwrap_or_else(|| config.ruby_output());
+    render_ruby(config, &expansion, &output_directory, options.deny_skipped)
+}
 
+/// Writes the Ruby gem sources for one binding expansion.
+///
+/// `pack ruby` passes the expansion that it builds the static library from.
+/// The extension then calls only functions that the library exports: Ruby
+/// resolves a missing function only at its first call, which crashes.
+pub(crate) fn render_ruby(
+    config: &Config,
+    expansion: &BindingExpansion,
+    output_directory: &Path,
+    deny_skipped: bool,
+) -> Result<()> {
+    let target = Target::Ruby;
     expansion
         .generation()
         .coverage_mode(CoverageMode::Partial)
-        .ruby_host(ruby_host(config, &expansion)?)
+        .ruby_host(ruby_host(config, expansion)?)
         .render(target)
         .map_err(|error| generation_error(target.name(), error))
         .and_then(|output| {
-            print_coverage(target.name(), &output, options.deny_skipped)?;
-            Generation::write_output(output, &output_directory)
+            print_coverage(target.name(), &output, deny_skipped)?;
+            Generation::write_output(output, output_directory)
                 .map(drop)
                 .map_err(|error| generation_error(target.name(), error))
         })
