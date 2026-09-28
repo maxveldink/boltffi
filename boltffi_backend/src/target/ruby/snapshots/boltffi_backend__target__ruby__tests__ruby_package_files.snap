@@ -40,6 +40,8 @@ module BoltFFIExtconf
   # exports every function this extension calls.
   CARGO_FEATURE_ARGS = ["--features", "my-lib/ffi"].freeze
   ACTIVE_FEATURES = "default,ffi"
+  # The kinds that cargo's `rustc-link-search=[KIND=]PATH` accepts.
+  LINK_SEARCH_KINDS = %w[native crate dependency framework all].freeze
 
   class << self
     def static_library
@@ -121,8 +123,12 @@ module BoltFFIExtconf
     def configure
       archive, metadata = static_library
       $LOCAL_LIBS << " #{archive.shellescape}"
-      metadata.fetch("native_link_search_paths", []).each do |path|
-        $LDFLAGS << " -L#{path.split("=", 2).last.shellescape}"
+      metadata.fetch("native_link_search_paths", []).each do |entry|
+        kind, path = entry.split("=", 2)
+        kind, path = "all", entry unless path && LINK_SEARCH_KINDS.include?(kind)
+        $LDFLAGS << " -L#{path.shellescape}" unless kind == "framework"
+        # Only Apple's linker reads -F. GNU ld reads -F as a different option.
+        $LDFLAGS << " -F#{path.shellescape}" if %w[framework all].include?(kind) && darwin?
       end
       linked = $LIBS.split
       native = metadata.fetch("native_static_libraries").reject { |flag| flag.start_with?("-l") && linked.include?(flag) }
@@ -134,6 +140,10 @@ module BoltFFIExtconf
     # Ruby loads extensions with RTLD_GLOBAL. Exported Rust symbols could then
     # bind to another extension's copy, so the extension exports only its
     # entry point and, on development Rubies, `ruby_abi_version`.
+    def darwin?
+      RbConfig::CONFIG["host_os"].include?("darwin")
+    end
+
     def export_only_entry_point
       symbols = ["Init_#{EXTENSION}"]
       symbols << "ruby_abi_version" if have_macro("RUBY_DLN_CHECK_ABI", "ruby.h")

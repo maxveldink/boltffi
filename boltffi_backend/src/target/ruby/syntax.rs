@@ -35,8 +35,10 @@ pub struct Literal(String);
 /// A record member with one of these names would replace the method on every
 /// instance: a member named `hash` breaks every `Hash` that holds the record.
 /// The list is `Object`, `Kernel`, `BasicObject`, and `Data` public instance
-/// methods whose names Rust can spell, plus the private `initialize` family.
-/// Ruby keywords are not in the list: `record.end` is a valid call.
+/// methods whose names Rust can spell, plus the private `initialize` family
+/// and the private hooks that Ruby calls on any object, such as
+/// `singleton_method_added`. Ruby keywords are not in the list: `record.end`
+/// is a valid call.
 const OBJECT_METHODS: &[&str] = &[
     "__id__",
     "__send__",
@@ -64,6 +66,7 @@ const OBJECT_METHODS: &[&str] = &[
     "itself",
     "members",
     "method",
+    "method_missing",
     "methods",
     "object_id",
     "private_methods",
@@ -75,6 +78,9 @@ const OBJECT_METHODS: &[&str] = &[
     "send",
     "singleton_class",
     "singleton_method",
+    "singleton_method_added",
+    "singleton_method_removed",
+    "singleton_method_undefined",
     "singleton_methods",
     "tap",
     "then",
@@ -362,6 +368,13 @@ mod tests {
         assert_eq!(
             Identifier::module_function("hash").unwrap().as_str(),
             "hash_"
+        );
+        // Ruby calls this hook while `Init_` defines each module function.
+        assert_eq!(
+            Identifier::module_function("singleton_method_added")
+                .unwrap()
+                .as_str(),
+            "singleton_method_added_"
         );
         assert_eq!(Identifier::module_function("end").unwrap().as_str(), "end");
         assert_eq!(
