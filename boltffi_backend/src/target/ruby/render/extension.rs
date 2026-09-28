@@ -110,49 +110,95 @@ pub fn render(
 ///
 /// Codec statements nest inside each other as plain text, so their own
 /// indentation carries no meaning. The generated source must stay readable
-/// for the people who debug it.
+/// for the people who debug it. A line that continues a string literal after
+/// a backslash stays as written, because its leading spaces are part of the
+/// string.
 fn indent(source: &str) -> String {
     let mut depth = 0usize;
     let mut indented = String::with_capacity(source.len());
     let mut previous_blank = true;
-    for line in source.lines() {
-        let line = line.trim();
+    let mut string_continues = false;
+    for raw in source.lines() {
+        if string_continues {
+            let scan = Scan::line(raw, Some('"'));
+            indented.push_str(raw);
+            indented.push('\n');
+            depth = (depth + scan.opens).saturating_sub(scan.closes);
+            string_continues = scan.continues_string(raw);
+            continue;
+        }
+        let line = raw.trim();
         if line.is_empty() && previous_blank {
             continue;
         }
         previous_blank = line.is_empty();
-        let (opens, closes) = braces(line);
+        let scan = Scan::line(line, None);
         let leading_closes = line
             .chars()
             .take_while(|character| *character == '}')
             .count();
-        let line_depth = depth.saturating_sub(leading_closes.min(closes));
+        let line_depth = depth.saturating_sub(leading_closes.min(scan.closes));
         if !line.is_empty() && !line.starts_with('#') {
             (0..line_depth).for_each(|_| indented.push_str("    "));
         }
         indented.push_str(line);
         indented.push('\n');
-        depth = (depth + opens).saturating_sub(closes);
+        depth = (depth + scan.opens).saturating_sub(scan.closes);
+        string_continues = scan.continues_string(line);
     }
     indented
 }
 
-/// Counts the braces of a line of C, skipping string and character literals.
-fn braces(line: &str) -> (usize, usize) {
-    let mut counts = (0, 0);
-    let mut quote = None;
-    let mut escaped = false;
-    for character in line.chars() {
-        match (quote, character) {
-            (Some(_), _) if escaped => escaped = false,
-            (Some(_), '\\') => escaped = true,
-            (Some(delimiter), _) if character == delimiter => quote = None,
-            (Some(_), _) => {}
-            (None, '"' | '\'') => quote = Some(character),
-            (None, '{') => counts.0 += 1,
-            (None, '}') => counts.1 += 1,
-            (None, _) => {}
+/// The braces on one line of C outside string and character literals.
+struct Scan {
+    opens: usize,
+    closes: usize,
+    /// The quote still open at the end of the line.
+    quote: Option<char>,
+}
+
+impl Scan {
+    /// Scans `line`, which starts inside `quote` when a literal continues.
+    fn line(line: &str, quote: Option<char>) -> Self {
+        let mut scan = Self {
+            opens: 0,
+            closes: 0,
+            quote,
+        };
+        let mut escaped = false;
+        for character in line.chars() {
+            match (scan.quote, character) {
+                (Some(_), _) if escaped => escaped = false,
+                (Some(_), '\\') => escaped = true,
+                (Some(delimiter), _) if character == delimiter => scan.quote = None,
+                (Some(_), _) => {}
+                (None, '"' | '\'') => scan.quote = Some(character),
+                (None, '{') => scan.opens += 1,
+                (None, '}') => scan.closes += 1,
+                (None, _) => {}
+            }
         }
+        scan
     }
-    counts
+
+    /// A string literal that is open at a final backslash continues on the
+    /// next line. A stray quote, such as the one in `/* don't */`, does not.
+    fn continues_string(&self, line: &str) -> bool {
+        self.quote == Some('"') && line.ends_with('\\')
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::indent;
+
+    #[test]
+    fn indent_nests_blocks_and_keeps_continued_string_literals() {
+        let source = "/* don't */\nvoid f(void) {\nif (x) {\ny();\n}\n}\nconst char *text = \"a\\\n    b {\";\nvoid g(void) {\nreturn;\n}\n";
+
+        assert_eq!(
+            indent(source),
+            "/* don't */\nvoid f(void) {\n    if (x) {\n        y();\n    }\n}\nconst char *text = \"a\\\n    b {\";\nvoid g(void) {\n    return;\n}\n"
+        );
+    }
 }
