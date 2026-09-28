@@ -91,14 +91,14 @@ pub fn member(key: &FieldKey) -> Result<Identifier> {
     }
 }
 
-/// The default Ruby module for a Cargo package, such as `CheckoutEngine` for
-/// `checkout-engine`.
+/// The default Ruby module for a Cargo package, such as `MyLib` for
+/// `my-lib`.
 pub fn default_module(package: &CanonicalName) -> Result<ConstantPath> {
     Constant::parse(name_case::upper_camel_from_snake(&package_snake(package)))
         .map(ConstantPath::single)
 }
 
-/// The `snake_case` spelling of a Cargo package, such as `checkout_engine`.
+/// The `snake_case` spelling of a Cargo package, such as `my_lib`.
 ///
 /// The binding contract keeps the Cargo package name as one name part, dashes
 /// included, so the dashes become underscores here.
@@ -106,8 +106,7 @@ pub fn package_snake(package: &CanonicalName) -> String {
     extension_stem(&Name::new(package).snake())
 }
 
-/// The extension file stem for a gem, such as `checkout_engine` for
-/// `checkout-engine`.
+/// The extension file stem for a gem, such as `my_lib` for `my-lib`.
 ///
 /// The stem names the compiled library and its `Init_<stem>` entry point, so
 /// it keeps only ASCII lowercase letters, digits, and underscores.
@@ -130,16 +129,13 @@ mod tests {
     #[test]
     fn package_names_map_to_ruby_modules_and_extension_stems() {
         for package in [
-            CanonicalName::single("checkout-engine"),
-            CanonicalName::single("checkout_engine"),
-            CanonicalName::new(vec![NamePart::new("checkout"), NamePart::new("engine")]),
+            CanonicalName::single("my-lib"),
+            CanonicalName::single("my_lib"),
+            CanonicalName::new(vec![NamePart::new("my"), NamePart::new("lib")]),
         ] {
-            assert_eq!(package_snake(&package), "checkout_engine");
-            assert_eq!(
-                default_module(&package).unwrap().to_string(),
-                "CheckoutEngine"
-            );
+            assert_eq!(package_snake(&package), "my_lib");
+            assert_eq!(default_module(&package).unwrap().to_string(), "MyLib");
         }
-        assert_eq!(extension_stem("checkout-engine"), "checkout_engine");
+        assert_eq!(extension_stem("my-lib"), "my_lib");
     }
 }

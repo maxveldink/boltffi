@@ -632,6 +632,7 @@ mod tests {
             "/external/workspace/Cargo.toml",
             "/external/workspace/demo/Cargo.toml",
             [
+                "--all-features",
                 "--no-default-features",
                 "--features",
                 "demo/c-demo",
@@ -647,6 +648,7 @@ mod tests {
         assert_eq!(
             expansion.feature_args(),
             [
+                "--all-features",
                 "--no-default-features",
                 "--features",
                 "demo/c-demo",

@@ -72,6 +72,10 @@ struct Argument {
     cleanup: Vec<Statement>,
     helpers: Vec<String>,
     /// Rust decodes this argument from encoded bytes, so decoding can fail.
+    ///
+    /// Rust also checks the other argument kinds, but those checks cannot
+    /// fail here: the wrapper passes a valid pointer for a record passed by
+    /// reference, and an exact byte count for a vector of records.
     encoded: bool,
 }
 

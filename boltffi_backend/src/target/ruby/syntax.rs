@@ -22,7 +22,7 @@ pub struct Identifier(String);
 #[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct Constant(String);
 
-/// A Ruby constant path, such as `CheckoutEngine::Native`.
+/// A Ruby constant path, such as `MyLib::Native`.
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub struct ConstantPath(Vec<Constant>);
 
@@ -375,12 +375,10 @@ mod tests {
         assert!(Identifier::member("Point").is_err());
         assert!(Identifier::module_function("has-dash").is_err());
         assert!(Constant::parse("point").is_err());
-        assert!(ConstantPath::parse("Checkout::").is_err());
+        assert!(ConstantPath::parse("MyLib::").is_err());
         assert_eq!(
-            ConstantPath::parse("CheckoutEngine::Native")
-                .unwrap()
-                .to_string(),
-            "CheckoutEngine::Native"
+            ConstantPath::parse("MyLib::Native").unwrap().to_string(),
+            "MyLib::Native"
         );
     }
 

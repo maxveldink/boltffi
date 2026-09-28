@@ -544,7 +544,7 @@ Enable Ruby with `--experimental` or `experimental = ["ruby"]` at the top level.
   - The extension stem `<stem>` is the gem name in `snake_case`. It names
     `lib/<stem>.rb`, `ext/<stem>/`, and the `Init_<stem>` entry point.
 - `module_name` (string, optional): Ruby module that holds the functions and
-  records, such as `CheckoutEngine::Native`.
+  records, such as `MyLib::Native`.
   - Default: the Cargo package name in `UpperCamelCase`.
 - `version` (string, optional): Gem version.
   - Default: the selected Cargo package's version.

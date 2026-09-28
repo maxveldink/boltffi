@@ -59,7 +59,7 @@ impl RubyHost {
     }
 
     /// Selects the Ruby module that holds the functions and records, such as
-    /// `CheckoutEngine::Native`.
+    /// `MyLib::Native`.
     pub fn module_name(mut self, module: &str) -> Result<Self> {
         self.module = Some(ConstantPath::parse(module)?);
         Ok(self)
@@ -383,14 +383,14 @@ mod tests {
     #[test]
     fn ruby_package_files_use_the_configured_gem_module_and_manifest() {
         let host = RubyHost::new()
-            .gem_name("checkout-engine")
-            .module_name("CheckoutEngine::Native")
+            .gem_name("my-lib")
+            .module_name("MyLib::Native")
             .expect("valid module")
-            .native_library("checkout_engine")
+            .native_library("my_lib")
             .cargo_manifest("../../Cargo.toml")
             .cargo_features(
                 "default,ffi",
-                vec!["--features".to_owned(), "checkout-engine/ffi".to_owned()],
+                vec!["--features".to_owned(), "my-lib/ffi".to_owned()],
             );
         let output = render(host, "#[export] pub fn ping() -> bool { true }");
 
@@ -402,26 +402,22 @@ mod tests {
         assert_eq!(
             paths,
             [
-                "ext/checkout_engine/boltffi.h",
-                "ext/checkout_engine/checkout_engine.c",
-                "lib/checkout_engine.rb",
-                "ext/checkout_engine/extconf.rb",
-                "ext/checkout_engine/boltffi_ruby.h",
-                "checkout-engine.gemspec",
+                "ext/my_lib/boltffi.h",
+                "ext/my_lib/my_lib.c",
+                "lib/my_lib.rb",
+                "ext/my_lib/extconf.rb",
+                "ext/my_lib/boltffi_ruby.h",
+                "my-lib.gemspec",
             ]
         );
         insta::assert_snapshot!(
             "ruby_package_files",
-            [
-                "lib/checkout_engine.rb",
-                "ext/checkout_engine/extconf.rb",
-                "checkout-engine.gemspec",
-            ]
-            .map(|path| format!("==> {path}\n{}", file(&output, path)))
-            .join("\n")
+            ["lib/my_lib.rb", "ext/my_lib/extconf.rb", "my-lib.gemspec",]
+                .map(|path| format!("==> {path}\n{}", file(&output, path)))
+                .join("\n")
         );
-        assert!(file(&output, "ext/checkout_engine/checkout_engine.c").contains(
-            "RUBY_FUNC_EXPORTED void Init_checkout_engine(void) {\n    VALUE boltffi_module = rb_define_module(\"CheckoutEngine\");\n    boltffi_module = rb_define_module_under(boltffi_module, \"Native\");"
+        assert!(file(&output, "ext/my_lib/my_lib.c").contains(
+            "RUBY_FUNC_EXPORTED void Init_my_lib(void) {\n    VALUE boltffi_module = rb_define_module(\"MyLib\");\n    boltffi_module = rb_define_module_under(boltffi_module, \"Native\");"
         ));
     }
 
@@ -442,6 +438,9 @@ mod tests {
 
             #[export]
             pub fn flatten(value: Option<Option<i32>>) -> Option<i32> { value.flatten() }
+
+            #[export]
+            pub fn keep(values: Option<Vec<Option<i32>>>) -> Option<Vec<Option<i32>>> { values }
         "#;
         let bindings = bindings(source);
         let output = RubyHost::new()
@@ -467,6 +466,9 @@ mod tests {
         );
         let extension = file(&output, "ext/demo/demo.c");
         assert!(extension.contains("\"ok\""));
+        // An optional inside a vector inside an optional keeps `None` and
+        // `Some(None)` apart, so it is supported.
+        assert!(extension.contains("\"keep\""));
         assert!(!extension.contains("\"parse\""));
         assert!(!extension.contains("\"current_mode\""));
     }

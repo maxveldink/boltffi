@@ -14,7 +14,7 @@ pub struct RubyConfig {
     #[serde(default)]
     pub gem_name: Option<String>,
     /// Ruby module that holds the functions and records, such as `Demo` or
-    /// `CheckoutEngine::Native`. Defaults to the package name in `UpperCamelCase`.
+    /// `MyLib::Native`. Defaults to the package name in `UpperCamelCase`.
     #[serde(default)]
     pub module_name: Option<String>,
     /// Gem version. Defaults to the Cargo package version.
