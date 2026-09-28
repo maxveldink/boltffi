@@ -13,8 +13,11 @@
  * 4. Send Rust only valid UTF-8. Rust builds `String` values from these bytes
  *    without a second check.
  * 5. Run no Ruby code while an argument is encoded. Each check reads the type
- *    and never calls a conversion method such as `to_str`. Ruby code could
- *    change a Hash or an Array after its size is written.
+ *    and never calls a conversion method such as `to_str`, and no conversion
+ *    prints a warning, because a warning hook is Ruby code. Ruby code could
+ *    change a Hash or an Array after its size is written. As a second line of
+ *    defense, each tuple read checks the type again, and a Hash whose size
+ *    changes during encoding raises before Rust runs.
  */
 #ifndef BOLTFFI_RUBY_H
 #define BOLTFFI_RUBY_H
@@ -111,15 +114,25 @@ static inline uint32_t boltffi_ruby_to_u32(VALUE value) { return (uint32_t)boltf
 static inline uint64_t boltffi_ruby_to_u64(VALUE value) { return (uint64_t)boltffi_ruby_unsigned(value, UINT64_MAX, "u64"); }
 static inline uintptr_t boltffi_ruby_to_usize(VALUE value) { return (uintptr_t)boltffi_ruby_unsigned(value, UINTPTR_MAX, "usize"); }
 
-/* Floats accept `Float` and `Integer`. */
+/*
+ * Floats accept `Float` and `Integer`. An Integer of more than 1023 bits can
+ * be too large for a double, and `rb_big2dbl` prints a warning for one that
+ * is. A warning runs Ruby code, so such an Integer raises instead.
+ */
 static inline double boltffi_ruby_to_f64(VALUE value) {
     if (RB_FLOAT_TYPE_P(value)) {
         return RFLOAT_VALUE(value);
     }
+    if (RB_FIXNUM_P(value)) {
+        return (double)FIX2LONG(value);
+    }
     if (!RB_INTEGER_TYPE_P(value)) {
         boltffi_ruby_wrong_type(value, "Float");
     }
-    return NUM2DBL(value);
+    if (rb_absint_numwords(value, 1, NULL) > 1023) {
+        rb_raise(rb_eRangeError, "integer out of range for f64");
+    }
+    return rb_big2dbl(value);
 }
 
 static inline float boltffi_ruby_to_f32(VALUE value) {
@@ -176,6 +189,18 @@ static inline void boltffi_ruby_expect_tuple(VALUE value, long size) {
     boltffi_ruby_expect_array(value);
     if (RARRAY_LEN(value) != size) {
         rb_raise(rb_eArgError, "expected an Array of %ld elements, got %ld", size, RARRAY_LEN(value));
+    }
+}
+
+/* Reads one tuple element. `rb_ary_entry` needs an Array, so the type is checked on every read. */
+static inline VALUE boltffi_ruby_tuple_entry(VALUE tuple, long index) {
+    return rb_ary_entry(boltffi_ruby_expect_array(tuple), index);
+}
+
+/* The count of a Hash is written before its pairs, so a Hash that changed meanwhile raises. */
+static inline void boltffi_ruby_expect_hash_size(VALUE hash, long size) {
+    if ((long)RHASH_SIZE(hash) != size) {
+        rb_raise(rb_eRuntimeError, "BoltFFI: a Hash changed while it was encoded");
     }
 }
 

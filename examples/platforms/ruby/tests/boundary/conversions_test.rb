@@ -34,6 +34,23 @@ class ConversionsTest < Minitest::Test
     assert_equal(Float::INFINITY, Demo.echo_f32(Float::INFINITY))
   end
 
+  # Ruby warns when an Integer is too large for a Float. A warning hook is Ruby
+  # code, and no Ruby code may run while an argument is encoded.
+  def test_integers_too_large_for_a_float_raise_without_a_warning
+    warnings = []
+    verbose = $VERBOSE
+    Warning.define_singleton_method(:warn) { |message, **| warnings << message }
+    $VERBOSE = true
+
+    assert_raises(RangeError) { Demo.echo_f64(1 << 1100) }
+    assert_raises(RangeError) { Demo.echo_vec_f64([1.0, 1 << 20_000]) }
+    assert_equal((1 << 1000).to_f, Demo.echo_f64(1 << 1000))
+    assert_empty(warnings)
+  ensure
+    $VERBOSE = verbose
+    Warning.singleton_class.remove_method(:warn)
+  end
+
   def test_booleans_are_strict
     assert_raises(TypeError) { Demo.echo_bool(nil) }
     assert_raises(TypeError) { Demo.echo_bool(1) }

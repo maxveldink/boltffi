@@ -139,8 +139,10 @@ BOLTFFI_RUBY_MAYBE_UNUSED static void boltffi_ruby_write_Shape(boltffi_ruby_writ
         VALUE boltffi_field_4 = RSTRUCT_GET(value, 4);
         {
             VALUE boltffi_hash_0 = boltffi_ruby_expect_hash(boltffi_field_4);
-            boltffi_ruby_write_count(writer, (long)RHASH_SIZE(boltffi_hash_0));
+            long boltffi_size_0 = (long)RHASH_SIZE(boltffi_hash_0);
+            boltffi_ruby_write_count(writer, boltffi_size_0);
             rb_hash_foreach(boltffi_hash_0, boltffi_ruby_write_Shape_field4_map_0, (VALUE)writer);
+            boltffi_ruby_expect_hash_size(boltffi_hash_0, boltffi_size_0);
         }
     }
 }

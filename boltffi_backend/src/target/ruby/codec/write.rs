@@ -84,9 +84,9 @@ impl<'context, 'bindings> Writer<'context, 'bindings> {
 
     /// Returns the C expression for one value of the plan.
     ///
-    /// A tuple element re-reads its path from the root at each use. That is
-    /// safe because encoding runs no Ruby code, so no `Array` on the path can
-    /// change after `boltffi_ruby_expect_tuple` checked it.
+    /// A tuple element re-reads its path from the root at each use. Each step
+    /// checks that it still reads an `Array`, so a tuple that Ruby code
+    /// replaced raises instead of reaching `rb_ary_entry`.
     fn reference(&self, value: &ValueRef) -> Result<Expression> {
         let (root, path) = match value.root() {
             ValueRoot::Binder(binder) => (Expression::identifier(bound(*binder)?), value.path()),
@@ -103,7 +103,7 @@ impl<'context, 'bindings> Writer<'context, 'bindings> {
         };
         path.iter().try_fold(root, |expression, key| match key {
             FieldKey::Position(position) => Ok(Expression::new(format!(
-                "rb_ary_entry({expression}, {position})"
+                "boltffi_ruby_tuple_entry({expression}, {position})"
             ))),
             _ => unsupported("named codec value path"),
         })
@@ -289,8 +289,10 @@ impl CodecWrite for Writer<'_, '_> {
             Ok(Statement::new(format!(
                 "{{\n\
                  VALUE boltffi_hash_{raw} = boltffi_ruby_expect_hash({value});\n\
-                 boltffi_ruby_write_count(writer, (long)RHASH_SIZE(boltffi_hash_{raw}));\n\
+                 long boltffi_size_{raw} = (long)RHASH_SIZE(boltffi_hash_{raw});\n\
+                 boltffi_ruby_write_count(writer, boltffi_size_{raw});\n\
                  rb_hash_foreach(boltffi_hash_{raw}, {callback}, (VALUE)writer);\n\
+                 boltffi_ruby_expect_hash_size(boltffi_hash_{raw}, boltffi_size_{raw});\n\
                  }}"
             )))
         });
