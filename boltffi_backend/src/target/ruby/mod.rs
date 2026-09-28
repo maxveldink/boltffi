@@ -34,8 +34,8 @@ use crate::{
 };
 
 use self::{
-    name_style::{default_module, extension_stem},
-    render::{extension, function::Function, record::Record},
+    name_style::{default_module, extension_stem, package_snake},
+    render::{extension, function::Function, package::Package, record::Record},
     support::unsupported,
     syntax::ConstantPath,
 };
@@ -46,6 +46,11 @@ use self::{
 pub struct RubyHost {
     module: Option<ConstantPath>,
     gem: Option<String>,
+    version: Option<String>,
+    library: Option<String>,
+    cargo_manifest: Option<String>,
+    active_features: String,
+    feature_args: Vec<String>,
 }
 
 impl RubyHost {
@@ -65,6 +70,35 @@ impl RubyHost {
     /// `snake_case`.
     pub fn gem_name(mut self, gem: impl Into<String>) -> Self {
         self.gem = Some(gem.into());
+        self
+    }
+
+    /// Selects the gem version.
+    pub fn version(mut self, version: Option<String>) -> Self {
+        self.version = version;
+        self
+    }
+
+    /// Selects the Rust library artifact name, `demo` for `libdemo.a`.
+    pub fn native_library(mut self, library: impl Into<String>) -> Self {
+        self.library = Some(library.into());
+        self
+    }
+
+    /// Records the crate manifest path, relative to the extension directory,
+    /// that the generated `extconf.rb` builds when no prebuilt library exists.
+    pub fn cargo_manifest(mut self, manifest: impl Into<String>) -> Self {
+        self.cargo_manifest = Some(manifest.into());
+        self
+    }
+
+    /// Records the cargo feature selection of the binding expansion: the
+    /// active features, comma separated, and the cargo arguments that
+    /// selected them. The generated `extconf.rb` replays the arguments, so
+    /// the library exports every function the extension calls.
+    pub fn cargo_features(mut self, active: impl Into<String>, arguments: Vec<String>) -> Self {
+        self.active_features = active.into();
+        self.feature_args = arguments;
         self
     }
 
@@ -218,7 +252,32 @@ impl host::HostBackend for RubyHost {
         _context: &RenderContext<Self::Surface>,
         declarations: Vec<RenderedDeclaration<'decl, Self::Surface>>,
     ) -> Result<GeneratedOutput> {
-        let files = extension::render(&self.stem(bindings), &self.module(bindings)?, declarations)?;
+        let gem = self.gem(bindings);
+        let stem = self.stem(bindings);
+        let module = self.module(bindings)?;
+        let artifact = self
+            .library
+            .clone()
+            .unwrap_or_else(|| package_snake(bindings.package().name()));
+        let version = self
+            .version
+            .clone()
+            .or_else(|| bindings.package().version().map(str::to_owned))
+            .unwrap_or_else(|| "0.1.0".to_owned());
+        let crate_name = bindings.package().name().as_path_string();
+        let package = Package {
+            gem: &gem,
+            version: &version,
+            stem: &stem,
+            module: &module,
+            artifact: &artifact,
+            cargo_manifest: self.cargo_manifest.as_deref(),
+            active_features: &self.active_features,
+            feature_args: &self.feature_args,
+            crate_name: &crate_name,
+        };
+        let mut files = extension::render(&stem, &module, declarations)?;
+        files.extend(package.render()?);
         Ok(GeneratedOutput::new(files, Vec::new()))
     }
 }
@@ -320,11 +379,17 @@ mod tests {
     }
 
     #[test]
-    fn ruby_extension_files_use_the_configured_gem_and_module() {
+    fn ruby_package_files_use_the_configured_gem_module_and_manifest() {
         let host = RubyHost::new()
             .gem_name("my-lib")
             .module_name("MyLib::Native")
-            .expect("valid module");
+            .expect("valid module")
+            .native_library("my_lib")
+            .cargo_manifest("../../Cargo.toml")
+            .cargo_features(
+                "default,ffi",
+                vec!["--features".to_owned(), "my-lib/ffi".to_owned()],
+            );
         let output = render(host, "#[export] pub fn ping() -> bool { true }");
 
         let paths = output
@@ -338,7 +403,16 @@ mod tests {
                 "ext/my_lib/boltffi.h",
                 "ext/my_lib/my_lib.c",
                 "ext/my_lib/boltffi_ruby.h",
+                "lib/my_lib.rb",
+                "ext/my_lib/extconf.rb",
+                "my-lib.gemspec",
             ]
+        );
+        insta::assert_snapshot!(
+            "ruby_package_files",
+            ["lib/my_lib.rb", "ext/my_lib/extconf.rb", "my-lib.gemspec",]
+                .map(|path| format!("==> {path}\n{}", file(&output, path)))
+                .join("\n")
         );
         assert!(file(&output, "ext/my_lib/my_lib.c").contains(
             "RUBY_FUNC_EXPORTED void Init_my_lib(void) {\n    VALUE boltffi_module = rb_define_module(\"MyLib\");\n    boltffi_module = rb_define_module_under(boltffi_module, \"Native\");"

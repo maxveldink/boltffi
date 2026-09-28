@@ -7,6 +7,7 @@ pub mod java;
 pub mod kmp;
 pub mod kotlin;
 pub mod python;
+pub mod ruby;
 pub mod wasm;
 
 pub use apple::{
@@ -29,6 +30,7 @@ pub use kotlin::{
 pub use python::PythonConfig;
 #[cfg(test)]
 pub use python::PythonWheelConfig;
+pub use ruby::RubyConfig;
 pub use wasm::{WasmConfig, WasmNpmTarget, WasmOptimizeLevel, WasmOptimizeOnMissing, WasmProfile};
 
 use serde::{Deserialize, Serialize};
@@ -53,4 +55,6 @@ pub struct TargetsConfig {
     pub csharp: CSharpConfig,
     #[serde(default)]
     pub c: CConfig,
+    #[serde(default)]
+    pub ruby: RubyConfig,
 }
