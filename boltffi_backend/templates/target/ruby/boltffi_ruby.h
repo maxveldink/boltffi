@@ -115,9 +115,10 @@ static inline uint64_t boltffi_ruby_to_u64(VALUE value) { return (uint64_t)boltf
 static inline uintptr_t boltffi_ruby_to_usize(VALUE value) { return (uintptr_t)boltffi_ruby_unsigned(value, UINTPTR_MAX, "usize"); }
 
 /*
- * Floats accept `Float` and `Integer`. An Integer of more than 1023 bits can
- * be too large for a double, and `rb_big2dbl` prints a warning for one that
- * is. A warning runs Ruby code, so such an Integer raises instead.
+ * Floats accept `Float` and `Integer`. `rb_big2dbl` prints a warning in
+ * verbose mode when an Integer is too large for a double, and a warning runs
+ * Ruby code. So verbose mode is off during the conversion, and an Integer
+ * too large for a double raises instead of becoming Infinity.
  */
 static inline double boltffi_ruby_to_f64(VALUE value) {
     if (RB_FLOAT_TYPE_P(value)) {
@@ -129,10 +130,14 @@ static inline double boltffi_ruby_to_f64(VALUE value) {
     if (!RB_INTEGER_TYPE_P(value)) {
         boltffi_ruby_wrong_type(value, "Float");
     }
-    if (rb_absint_numwords(value, 1, NULL) > 1023) {
+    VALUE verbose = ruby_verbose;
+    ruby_verbose = Qfalse;
+    double result = rb_big2dbl(value);
+    ruby_verbose = verbose;
+    if (isinf(result)) {
         rb_raise(rb_eRangeError, "integer out of range for f64");
     }
-    return rb_big2dbl(value);
+    return result;
 }
 
 static inline float boltffi_ruby_to_f32(VALUE value) {

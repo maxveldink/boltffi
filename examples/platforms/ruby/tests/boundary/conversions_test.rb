@@ -42,10 +42,12 @@ class ConversionsTest < Minitest::Test
     Warning.define_singleton_method(:warn) { |message, **| warnings << message }
     $VERBOSE = true
 
-    assert_raises(RangeError) { Demo.echo_f64(1 << 1100) }
+    assert_raises(RangeError) { Demo.echo_f64(1 << 1024) }
     assert_raises(RangeError) { Demo.echo_vec_f64([1.0, 1 << 20_000]) }
-    assert_equal((1 << 1000).to_f, Demo.echo_f64(1 << 1000))
+    assert_equal((1 << 1023).to_f, Demo.echo_f64(1 << 1023))
+    assert_equal(-Float::MAX, Demo.echo_f64(-Float::MAX.to_i))
     assert_empty(warnings)
+    assert_equal(true, $VERBOSE)
   ensure
     $VERBOSE = verbose
     Warning.singleton_class.remove_method(:warn)
