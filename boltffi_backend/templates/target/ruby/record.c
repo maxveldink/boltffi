@@ -1,12 +1,5 @@
 static VALUE {{ record.symbols.builder() }}(const VALUE *values) {
-    VALUE boltffi_record = rb_obj_alloc({{ record.symbols.class() }});
-{%- if record.members.is_empty() %}
-    (void)values;
-{%- endif %}
-{%- for member in record.members %}
-    RSTRUCT_SET(boltffi_record, {{ loop.index0 }}, values[{{ loop.index0 }}]);
-{%- endfor %}
-    return rb_obj_freeze(boltffi_record);
+    return rb_funcallv({{ record.symbols.class() }}, rb_intern("new"), {{ record.members.len() }}, values);
 }
 {%- match record.body %}
 {%- when Body::Direct(direct) %}

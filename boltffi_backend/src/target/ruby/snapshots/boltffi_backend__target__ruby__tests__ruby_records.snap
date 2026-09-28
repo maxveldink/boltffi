@@ -16,10 +16,7 @@ BOLTFFI_RUBY_MAYBE_UNUSED static VALUE boltffi_ruby_read_Shape(boltffi_ruby_read
 BOLTFFI_RUBY_MAYBE_UNUSED static void boltffi_ruby_write_Shape(boltffi_ruby_writer *writer, VALUE value);
 
 static VALUE boltffi_ruby_build_Point(const VALUE *values) {
-    VALUE boltffi_record = rb_obj_alloc(boltffi_ruby_class_Point);
-    RSTRUCT_SET(boltffi_record, 0, values[0]);
-    RSTRUCT_SET(boltffi_record, 1, values[1]);
-    return rb_obj_freeze(boltffi_record);
+    return rb_funcallv(boltffi_ruby_class_Point, rb_intern("new"), 2, values);
 }
 
 BOLTFFI_RUBY_MAYBE_UNUSED static VALUE boltffi_ruby_box_Point(___Point value) {
@@ -50,13 +47,7 @@ BOLTFFI_RUBY_MAYBE_UNUSED static void boltffi_ruby_write_Point(boltffi_ruby_writ
 }
 
 static VALUE boltffi_ruby_build_Shape(const VALUE *values) {
-    VALUE boltffi_record = rb_obj_alloc(boltffi_ruby_class_Shape);
-    RSTRUCT_SET(boltffi_record, 0, values[0]);
-    RSTRUCT_SET(boltffi_record, 1, values[1]);
-    RSTRUCT_SET(boltffi_record, 2, values[2]);
-    RSTRUCT_SET(boltffi_record, 3, values[3]);
-    RSTRUCT_SET(boltffi_record, 4, values[4]);
-    return rb_obj_freeze(boltffi_record);
+    return rb_funcallv(boltffi_ruby_class_Shape, rb_intern("new"), 5, values);
 }
 
 static int boltffi_ruby_write_Shape_field4_map_0(VALUE boltffi_bound_0, VALUE boltffi_bound_1, VALUE boltffi_argument) {
