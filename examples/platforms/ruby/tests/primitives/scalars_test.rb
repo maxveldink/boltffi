@@ -37,6 +37,10 @@ class ScalarsTest < Minitest::Test
     assert_equal(30, Demo.add(10, 20), "case:primitives.scalars.i32.should_add_with_benchmark_alias")
   end
 
+  def test_parameters_named_status_do_not_collide
+    assert_nil(Demo.notify_status_collision(1, 2), "case:primitives.scalars.named_status.should_accept_both_names")
+  end
+
   def test_echo_u32
     assert_equal(4_000_000_000, Demo.echo_u32(4_000_000_000), "case:primitives.scalars.u32.should_roundtrip_large_value")
   end

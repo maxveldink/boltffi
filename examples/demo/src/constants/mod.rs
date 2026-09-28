@@ -143,7 +143,12 @@ pub const DEMO_BUSY: DemoState = DemoState::Busy { jobs: 3 };
     exclude(kotlin, reason = ExclusionReason::ImplementationGap,
         details = "Kotlin bindings represent tuples as Pair or Triple. A one-element Rust tuple needs a generated wrapper or an explicit flattening policy, neither of which is implemented. Tracked in #942."),
     exclude(java, reason = ExclusionReason::ImplementationGap,
-        details = "Java bindings do not implement Rust tuple types. This constant needs a generated tuple representation and matching codec support before it can be tested.")
+        details = "Java bindings do not implement Rust tuple types. This constant needs a generated tuple representation and matching codec support before it can be tested."),
+    exclude(
+        ruby,
+        reason = ExclusionReason::ImplementationGap,
+        details = "the Ruby target does not support constants yet"
+    )
 )]
 #[export]
 pub const DEMO_SINGLE: (u32,) = (17,);

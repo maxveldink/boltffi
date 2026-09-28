@@ -371,6 +371,11 @@ pub async fn async_resumed_thread_name() -> String {
         c,
         reason = ExclusionReason::ImplementationGap,
         details = "C target is sync-only; async functions are not yet supported"
+    ),
+    exclude(
+        ruby,
+        reason = ExclusionReason::ImplementationGap,
+        details = "the Ruby target does not support async functions yet"
     )
 )]
 #[export]
