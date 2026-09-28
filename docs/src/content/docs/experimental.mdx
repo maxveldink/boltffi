@@ -78,7 +78,7 @@ Ruby supports synchronous free functions whose parameters and results are primit
 - Record methods and initializers are not bound; records are data only.
 - `&mut` parameters are not supported.
 - A nested `Option`, such as `Option<Option<i32>>`, is skipped: Ruby `nil` cannot tell `None` from `Some(None)`.
-- A Rust panic aborts the process.
+- A panic in a synchronous function aborts the process, as in every BoltFFI target. [Catch it in the function](/docs/ruby#panics) to return `nil` instead.
 - [Ruby packaging](/docs/packaging#ruby-experimental) is host-only, and the compiled extension matches one Ruby version. Windows is not supported yet.
 
 ### TypeScript Async Streams

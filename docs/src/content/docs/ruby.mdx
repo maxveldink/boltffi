@@ -63,8 +63,28 @@ point.to_h     # => {x: 1.0, y: 2.0}
 
 A field whose name is also a method of every Ruby object, such as `hash` or `class`, gets a trailing underscore: `record.hash_`. A function whose name is also a method of every Ruby module, such as `name`, gets one too: `Mylib.name_`.
 
+## Panics
+
+A panic in a synchronous function aborts the Ruby process, as it does for every BoltFFI target. BoltFFI exports are `extern "C"` functions, and a panic cannot unwind out of one. Other targets catch panics only in async functions, which the Ruby target does not support yet.
+
+To keep the process alive, catch the panic inside the function and return an `Option`. Ruby then receives `nil`:
+
+```rust
+#[export]
+pub fn checked_divide(dividend: i32, divisor: i32) -> Option<i32> {
+    // The division panics when the divisor is 0.
+    std::panic::catch_unwind(|| dividend / divisor).ok()
+}
+```
+
+```ruby
+Mylib.checked_divide(6, 3) # => 2
+Mylib.checked_divide(1, 0) # => nil
+```
+
+The pattern needs `panic = "unwind"`, which is the Cargo default. Use it only for a function whose result is not already an `Option`, because `nil` then means that the function failed. If the closure captures a value that is not unwind-safe, wrap it in `std::panic::AssertUnwindSafe`. The panic message still goes to standard error.
+
 ## Runtime behavior
 
 - Calls hold the global VM lock. A long Rust computation blocks other Ruby threads for its duration.
-- A Rust panic aborts the process. BoltFFI exports are `extern "C"` functions, which cannot unwind into Ruby. Keep exported functions panic-free.
 - The compiled extension is specific to the Ruby version it was built for. A precompiled gem needs one build per Ruby minor version.
