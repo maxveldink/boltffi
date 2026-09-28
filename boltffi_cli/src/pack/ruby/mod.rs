@@ -12,13 +12,13 @@ use boltffi_bindgen::target::Target;
 use crate::{
     build::{
         BindingExpansion, BuildOptions, BuildSelection, Builder, CargoBuildProfile, OutputCallback,
-        resolve_build_profile,
+        native_link::NativeLinkMetadata, resolve_build_profile,
     },
     cargo::Cargo,
     cli::{CliError, Result},
     commands::{generate::bindings::render_ruby, pack::PackRubyOptions},
     config::Config,
-    pack::{print_cargo_line, resolve_build_cargo_args},
+    pack::{apple::compute_checksum, print_cargo_line, resolve_build_cargo_args},
     reporter::Reporter,
     target::NativeHostPlatform,
 };
@@ -38,6 +38,11 @@ pub(crate) fn pack_ruby(
     }
 
     reporter.section("💎", "Packing Ruby");
+    if !options.execution.regenerate && !options.execution.no_build {
+        return Err(failed(
+            "pack ruby builds the static library and the sources together; remove '--regenerate false'",
+        ));
+    }
 
     let build_cargo_args = resolve_build_cargo_args(config, &options.execution.cargo_args);
     let cargo = Cargo::current(&build_cargo_args)?;
@@ -115,10 +120,34 @@ pub(crate) fn pack_ruby(
         to: vendored.clone(),
         source,
     })?;
-    native_link.write(&link_metadata)?;
+    write_link_metadata(&native_link, &extension_dir, &link_metadata)?;
     step.finish_success();
     reporter.finish();
     Ok(())
+}
+
+/// Writes the link metadata with a digest of the extension source.
+///
+/// `extconf.rb` refuses the vendored library when the source changed after
+/// the pack, such as by a later `boltffi generate ruby`. The library could
+/// lack a function that the new source calls, and Ruby would crash at the
+/// first call instead of failing the build.
+fn write_link_metadata(
+    native_link: &NativeLinkMetadata,
+    extension_dir: &Path,
+    path: &Path,
+) -> Result<()> {
+    let stem = extension_dir
+        .file_name()
+        .and_then(|name| name.to_str())
+        .ok_or_else(|| failed("the Ruby extension directory has no UTF-8 name"))?;
+    let mut metadata = serde_json::to_value(native_link)
+        .map_err(|source| failed(&format!("serialize native link metadata: {source}")))?;
+    metadata["source_sha256"] = compute_checksum(&extension_dir.join(format!("{stem}.c")))?.into();
+    std::fs::write(path, metadata.to_string()).map_err(|source| CliError::WriteFailed {
+        path: path.to_path_buf(),
+        source,
+    })
 }
 
 /// Returns the one `ext/<stem>` directory that holds a generated `extconf.rb`.

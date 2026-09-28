@@ -921,7 +921,9 @@ The Rust library must declare the `staticlib` crate type:
 crate-type = ["staticlib", "rlib"]
 ```
 
-`pack ruby` generates the sources with the same cargo arguments that build the static library: `[cargo] global_args`, `[cargo.command_args].build`, and `--cargo-arg`. `[cargo.command_args].generate` does not apply, so the extension never calls a function that the library lacks.
+`pack ruby` generates the sources with the same cargo arguments that build the static library: `[cargo] global_args`, `[cargo.command_args].build`, and `--cargo-arg`. `[cargo.command_args].generate` does not apply. For the same reason, `pack ruby` rejects `--regenerate false` unless `--no-build` is also set.
+
+The link metadata beside the library records a digest of the extension source. If the source changes after the pack, for example through a later `boltffi generate ruby`, `extconf.rb` stops with an error. Run `boltffi pack ruby` again. Otherwise the library could lack a function that the new source calls, and Ruby would crash at the first call.
 
 ### Output structure
 

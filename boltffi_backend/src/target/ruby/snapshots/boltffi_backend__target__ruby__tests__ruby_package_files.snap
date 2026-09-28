@@ -26,6 +26,7 @@ require "my_lib/my_lib"
 # Each prebuilt library has a `<library>.boltffi-link.json` file beside it.
 # That file lists the system libraries the Rust standard library needs.
 
+require "digest"
 require "json"
 require "mkmf"
 require "open3"
@@ -59,7 +60,19 @@ module BoltFFIExtconf
 
     def link_metadata(path)
       abort("boltffi: missing link metadata #{path}") unless File.exist?(path)
-      JSON.parse(File.read(path))
+      metadata = JSON.parse(File.read(path))
+      expect_packed_source(path, metadata["source_sha256"])
+      metadata
+    end
+
+    # `boltffi pack ruby` records a digest of the extension source beside the
+    # library. A library packed for another source can lack a function that
+    # this source calls, and Ruby would crash at the first call.
+    def expect_packed_source(path, digest)
+      return unless digest
+      return if Digest::SHA256.file(File.join(__dir__, "#{EXTENSION}.c")).hexdigest == digest
+
+      abort("boltffi: #{path} belongs to other extension sources; run boltffi pack ruby again")
     end
 
     # Builds the crate the way `boltffi pack ruby` does: `cargo rustc` with the
