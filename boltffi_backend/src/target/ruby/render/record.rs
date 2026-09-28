@@ -6,8 +6,12 @@
 //!
 //! The extension builds each instance through the class's public `new`, so
 //! a returned record is exactly what `Point.new(x:, y:)` returns, including
-//! any `initialize` that the program defines. A faster path would write the
-//! members directly, but it would depend on how Ruby stores `Data`.
+//! any `initialize` that the program defines. Writing the members directly
+//! would be faster. That change can come later, with its tradeoffs.
+//!
+//! Arguments rely on Ruby storing a `Data` instance as a `Struct`:
+//! `RSTRUCT_GET` reads each member. Reading through the member methods
+//! instead would run Ruby code while the extension encodes an argument.
 //!
 //! A direct record also crosses as its C struct: the box and unbox functions
 //! convert between that struct and the `Data` instance.
