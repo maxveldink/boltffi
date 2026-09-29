@@ -64,6 +64,28 @@ class ConversionsTest < Minitest::Test
     assert_predicate(Demo.echo_string("plain"), :ascii_only?)
   end
 
+  def test_records_are_frozen_data_values
+    point = Demo.make_point(1.0, 2.0)
+
+    assert_kind_of(Data, point)
+    assert_predicate(point, :frozen?)
+    assert_equal(Demo::Point.new(x: 1.0, y: 2.0), point)
+    assert_equal({ x: 1.0, y: 2.0 }, point.to_h)
+    assert_raises(TypeError) { Demo.echo_point({ x: 1.0, y: 2.0 }) }
+    assert_raises(TypeError) { Demo.echo_point(Demo::Person.new(name: "Ada", age: 36)) }
+  end
+
+  def test_record_fields_are_checked_when_they_cross
+    assert_raises(TypeError) { Demo.echo_point(Demo::Point.new(x: "1", y: 2.0)) }
+    assert_raises(TypeError) { Demo.echo_person(Demo::Person.new(name: nil, age: 1)) }
+  end
+
+  def test_record_subclasses_cross_as_their_record
+    subclass = Class.new(Demo::Point)
+
+    assert_equal(Demo::Point.new(x: 3.0, y: 4.0), Demo.echo_point(subclass.new(x: 3.0, y: 4.0)))
+  end
+
   def test_functions_use_fixed_arity
     assert_equal(1, Demo.method(:echo_string).arity)
     assert_raises(ArgumentError) { Demo.echo_string }

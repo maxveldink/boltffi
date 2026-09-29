@@ -297,12 +297,7 @@ pub struct Color {
 #[demo_bench_macros::demo_case(
     "records.blittable.color.should_roundtrip_value",
     justification = "Ensure a blittable Color crosses the wire and returns unchanged.",
-    directions = "Call `records::blittable::echo_color` through the generated binding and assert a blittable Color crosses the wire and returns unchanged.",
-    exclude(
-        ruby,
-        reason = ExclusionReason::ImplementationGap,
-        details = "the Ruby target does not render records yet"
-    )
+    directions = "Call `records::blittable::echo_color` through the generated binding and assert a blittable Color crosses the wire and returns unchanged."
 )]
 #[export]
 pub fn echo_color(c: Color) -> Color {
@@ -312,12 +307,7 @@ pub fn echo_color(c: Color) -> Color {
 #[demo_bench_macros::demo_case(
     "records.blittable.color.should_make_from_channels",
     justification = "Ensure make_color returns a Color containing the provided channel values.",
-    directions = "Call `records::blittable::make_color` through the generated binding and assert make_color returns a Color containing the provided channel values.",
-    exclude(
-        ruby,
-        reason = ExclusionReason::ImplementationGap,
-        details = "the Ruby target does not render records yet"
-    )
+    directions = "Call `records::blittable::make_color` through the generated binding and assert make_color returns a Color containing the provided channel values."
 )]
 #[export]
 pub fn make_color(r: u8, g: u8, b: u8, a: u8) -> Color {

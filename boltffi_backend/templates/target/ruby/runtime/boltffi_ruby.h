@@ -35,7 +35,7 @@
 #error "BoltFFI Ruby extensions require a little-endian target"
 #endif
 
-/* The argument check exists even when no function uses it. */
+/* Record helpers and the argument check exist even when no function uses them. */
 #if defined(__GNUC__) || defined(__clang__)
 #define BOLTFFI_RUBY_MAYBE_UNUSED __attribute__((unused))
 #else
@@ -173,6 +173,12 @@ static inline VALUE boltffi_ruby_utf8(VALUE value) {
     return value;
 }
 
+static inline void boltffi_ruby_expect_record(VALUE value, VALUE record_class) {
+    if (!RTEST(rb_obj_is_kind_of(value, record_class))) {
+        rb_raise(rb_eTypeError, "wrong argument type %" PRIsVALUE " (expected %" PRIsVALUE ")", rb_obj_class(value), record_class);
+    }
+}
+
 /* ---- C to Ruby --------------------------------------------------------- */
 
 static inline VALUE boltffi_ruby_from_bool(bool value) { return value ? Qtrue : Qfalse; }
@@ -213,9 +219,40 @@ static inline const uint8_t *boltffi_ruby_read_bytes(boltffi_ruby_reader *reader
         return value;                                                               \
     }
 
+BOLTFFI_RUBY_READ_SCALAR(u8, uint8_t)
+BOLTFFI_RUBY_READ_SCALAR(i8, int8_t)
+BOLTFFI_RUBY_READ_SCALAR(u16, uint16_t)
+BOLTFFI_RUBY_READ_SCALAR(i16, int16_t)
 BOLTFFI_RUBY_READ_SCALAR(u32, uint32_t)
+BOLTFFI_RUBY_READ_SCALAR(i32, int32_t)
+BOLTFFI_RUBY_READ_SCALAR(u64, uint64_t)
+BOLTFFI_RUBY_READ_SCALAR(i64, int64_t)
+BOLTFFI_RUBY_READ_SCALAR(f32, float)
+BOLTFFI_RUBY_READ_SCALAR(f64, double)
 
 #undef BOLTFFI_RUBY_READ_SCALAR
+
+static inline VALUE boltffi_ruby_read_bool(boltffi_ruby_reader *reader) {
+    uint8_t value = boltffi_ruby_read_raw_u8(reader);
+    if (value > 1) {
+        boltffi_ruby_malformed();
+    }
+    return value ? Qtrue : Qfalse;
+}
+
+static inline VALUE boltffi_ruby_read_i8(boltffi_ruby_reader *reader) { return boltffi_ruby_from_i8(boltffi_ruby_read_raw_i8(reader)); }
+static inline VALUE boltffi_ruby_read_i16(boltffi_ruby_reader *reader) { return boltffi_ruby_from_i16(boltffi_ruby_read_raw_i16(reader)); }
+static inline VALUE boltffi_ruby_read_i32(boltffi_ruby_reader *reader) { return boltffi_ruby_from_i32(boltffi_ruby_read_raw_i32(reader)); }
+static inline VALUE boltffi_ruby_read_i64(boltffi_ruby_reader *reader) { return boltffi_ruby_from_i64(boltffi_ruby_read_raw_i64(reader)); }
+/* `isize` and `usize` always cross as 8 bytes. */
+static inline VALUE boltffi_ruby_read_isize(boltffi_ruby_reader *reader) { return LL2NUM((long long)boltffi_ruby_read_raw_i64(reader)); }
+static inline VALUE boltffi_ruby_read_u8(boltffi_ruby_reader *reader) { return boltffi_ruby_from_u8(boltffi_ruby_read_raw_u8(reader)); }
+static inline VALUE boltffi_ruby_read_u16(boltffi_ruby_reader *reader) { return boltffi_ruby_from_u16(boltffi_ruby_read_raw_u16(reader)); }
+static inline VALUE boltffi_ruby_read_u32(boltffi_ruby_reader *reader) { return boltffi_ruby_from_u32(boltffi_ruby_read_raw_u32(reader)); }
+static inline VALUE boltffi_ruby_read_u64(boltffi_ruby_reader *reader) { return boltffi_ruby_from_u64(boltffi_ruby_read_raw_u64(reader)); }
+static inline VALUE boltffi_ruby_read_usize(boltffi_ruby_reader *reader) { return ULL2NUM((unsigned long long)boltffi_ruby_read_raw_u64(reader)); }
+static inline VALUE boltffi_ruby_read_f32(boltffi_ruby_reader *reader) { return boltffi_ruby_from_f32(boltffi_ruby_read_raw_f32(reader)); }
+static inline VALUE boltffi_ruby_read_f64(boltffi_ruby_reader *reader) { return boltffi_ruby_from_f64(boltffi_ruby_read_raw_f64(reader)); }
 
 static inline VALUE boltffi_ruby_read_string(boltffi_ruby_reader *reader) {
     uint32_t len = boltffi_ruby_read_raw_u32(reader);
@@ -347,6 +384,35 @@ static inline void boltffi_ruby_write_raw(boltffi_ruby_writer *writer, const voi
     if (count != 0) {
         memcpy(slot, bytes, count);
     }
+}
+
+static inline void boltffi_ruby_write_raw_u8(boltffi_ruby_writer *writer, uint8_t value) {
+    *boltffi_ruby_writer_reserve(writer, 1) = value;
+}
+
+#define BOLTFFI_RUBY_WRITE_SCALAR(name, type, wire_type)                        \
+    static inline void boltffi_ruby_write_##name(boltffi_ruby_writer *writer, VALUE value) { \
+        wire_type wire = (wire_type)boltffi_ruby_to_##name(value);              \
+        boltffi_ruby_write_raw(writer, &wire, sizeof(wire));                    \
+    }
+
+BOLTFFI_RUBY_WRITE_SCALAR(i8, int8_t, int8_t)
+BOLTFFI_RUBY_WRITE_SCALAR(i16, int16_t, int16_t)
+BOLTFFI_RUBY_WRITE_SCALAR(i32, int32_t, int32_t)
+BOLTFFI_RUBY_WRITE_SCALAR(i64, int64_t, int64_t)
+BOLTFFI_RUBY_WRITE_SCALAR(isize, intptr_t, int64_t)
+BOLTFFI_RUBY_WRITE_SCALAR(u8, uint8_t, uint8_t)
+BOLTFFI_RUBY_WRITE_SCALAR(u16, uint16_t, uint16_t)
+BOLTFFI_RUBY_WRITE_SCALAR(u32, uint32_t, uint32_t)
+BOLTFFI_RUBY_WRITE_SCALAR(u64, uint64_t, uint64_t)
+BOLTFFI_RUBY_WRITE_SCALAR(usize, uintptr_t, uint64_t)
+BOLTFFI_RUBY_WRITE_SCALAR(f32, float, float)
+BOLTFFI_RUBY_WRITE_SCALAR(f64, double, double)
+
+#undef BOLTFFI_RUBY_WRITE_SCALAR
+
+static inline void boltffi_ruby_write_bool(boltffi_ruby_writer *writer, VALUE value) {
+    boltffi_ruby_write_raw_u8(writer, boltffi_ruby_to_bool(value) ? 1 : 0);
 }
 
 static inline void boltffi_ruby_write_count(boltffi_ruby_writer *writer, long count) {

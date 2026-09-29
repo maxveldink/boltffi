@@ -2,11 +2,11 @@
 //!
 //! The Ruby target renders a C extension that links the Rust static library
 //! and calls the shared C ABI (`CBridge`) directly. Every value crosses as a
-//! plain Ruby object: `Integer`, `Float`, `true`/`false`, or `String`. The
-//! extension builds those objects eagerly, so Ruby code, and YJIT, see
-//! ordinary Ruby values.
+//! plain Ruby object: `Integer`, `Float`, `true`/`false`, `String`, and one
+//! frozen `Data` class per record. The extension builds those objects eagerly,
+//! so Ruby code, and YJIT, see ordinary Ruby values.
 //!
-//! The target renders synchronous free functions. Records, options,
+//! The target renders synchronous free functions and records. Options,
 //! collections, enums, classes, callbacks, streams, async functions,
 //! constants, custom types, and fallible functions are not supported yet.
 
@@ -31,7 +31,7 @@ use crate::{
 };
 
 use self::{
-    render::{extension, function::Function, package::Package},
+    render::{extension, function::Function, package::Package, record::Record},
     support::unsupported,
 };
 use super::{
@@ -140,10 +140,7 @@ impl host::HostBackend for RubyCExtHost {
 
     fn binding_capabilities(&self) -> HostCapabilities {
         HostCapabilities::new()
-            .unsupported(
-                BindingCapability::Records,
-                "records are not implemented in the Ruby host",
-            )
+            .stable(BindingCapability::Records)
             .stable(BindingCapability::Functions)
             .unsupported(
                 BindingCapability::Enums,
@@ -177,11 +174,11 @@ impl host::HostBackend for RubyCExtHost {
 
     fn record(
         &self,
-        _decl: &RecordDecl<Self::Surface>,
-        _bridge: &Self::Bridge,
-        _context: &RenderContext<Self::Surface>,
+        decl: &RecordDecl<Self::Surface>,
+        bridge: &Self::Bridge,
+        context: &RenderContext<Self::Surface>,
     ) -> Result<Emitted> {
-        unsupported("record")
+        Record::from_declaration(decl, bridge, context)?.render()
     }
 
     fn enumeration(
@@ -197,9 +194,9 @@ impl host::HostBackend for RubyCExtHost {
         &self,
         decl: &FunctionDecl<Self::Surface>,
         bridge: &Self::Bridge,
-        _context: &RenderContext<Self::Surface>,
+        context: &RenderContext<Self::Surface>,
     ) -> Result<Emitted> {
-        Function::from_declaration(decl, bridge)?.render()
+        Function::from_declaration(decl, bridge, context)?.render()
     }
 
     fn class(
@@ -374,6 +371,31 @@ mod tests {
     }
 
     #[test]
+    fn ruby_target_renders_records() {
+        let output = render(
+            RubyCExtHost::new(),
+            r#"
+            #[data]
+            pub struct Point { pub x: f64, pub y: f64 }
+
+            #[data]
+            pub struct Person { pub name: String, pub hash: u32, pub home: Point }
+
+            #[export]
+            pub fn echo_point(point: Point) -> Point { point }
+
+            #[export]
+            pub fn shift(point: &Point, dx: f64) -> Point { Point { x: point.x + dx, y: point.y } }
+
+            #[export]
+            pub fn echo_person(person: Person) -> Person { person }
+            "#,
+        );
+
+        insta::assert_snapshot!("ruby_records", file(&output, "ext/demo/demo.c"));
+    }
+
+    #[test]
     fn ruby_package_files_use_the_configured_gem_module_and_manifest() {
         let host = RubyCExtHost::new()
             .gem_name("my-lib")
@@ -500,6 +522,29 @@ mod tests {
             error,
             Error::RubyNameCollision { ref name, .. } if name == "freeze_"
         ));
+    }
+
+    #[test]
+    fn ruby_record_members_that_escape_to_one_name_collide() {
+        let bindings = bindings(
+            r#"
+            #[data]
+            pub struct Tagged { pub hash: String, pub hash_: String }
+
+            #[export]
+            pub fn tagged(value: Tagged) -> Tagged { value }
+            "#,
+        );
+        let error = RubyCExtHost::new()
+            .into_target(&bindings)
+            .expect("Ruby target")
+            .render(&bindings)
+            .expect_err("both fields want the member hash_");
+
+        assert_eq!(
+            error.to_string(),
+            "ruby name collision in record `Tagged` members: `hash_` is used by field `hash` and field `hash_`"
+        );
     }
 
     #[test]

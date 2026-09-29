@@ -3,3 +3,4 @@
 pub mod extension;
 pub mod function;
 pub mod package;
+pub mod record;

@@ -8,24 +8,42 @@
 
 use boltffi_binding::{
     BinderId, BuiltinType, CallbackId, ClassId, CodecWrite, CustomTypeId, ElementCount, EnumId,
-    MapKind, Op, Primitive, RecordId, ValueRef, ValueRoot, WritePlan,
+    FieldKey, MapKind, Native, Op, Primitive, RecordId, ValueRef, ValueRoot, WritePlan,
 };
 
 use crate::{
     bridge::c::{Expression, Identifier, Statement},
-    core::Result,
-    target::ruby::cext::support::unsupported,
+    core::{Error, RenderContext, Result},
+    target::ruby::cext::{
+        support::unsupported,
+        symbol::{PrimitiveSymbols, RecordSymbols},
+    },
 };
 
 /// Renders encode statements for codec trees.
-pub struct Writer {
+pub struct Writer<'context, 'bindings> {
+    context: &'context RenderContext<'bindings, Native>,
     root: Expression,
+    root_path: Vec<FieldKey>,
 }
 
-impl Writer {
+impl<'context, 'bindings> Writer<'context, 'bindings> {
     /// Creates a writer whose plans start at the C expression `root`.
-    pub fn new(root: Expression) -> Self {
-        Self { root }
+    pub fn new(context: &'context RenderContext<'bindings, Native>, root: Expression) -> Self {
+        Self {
+            context,
+            root,
+            root_path: Vec::new(),
+        }
+    }
+
+    /// Declares that `root` already resolves this path of the plan's value.
+    ///
+    /// A record field plan starts at `self.field`; the record writer binds the
+    /// field to a local first, so the writer strips `field` from the path.
+    pub fn root_path(mut self, path: Vec<FieldKey>) -> Self {
+        self.root_path = path;
+        self
     }
 
     /// Renders statements that append `plan` to `writer`.
@@ -37,7 +55,13 @@ impl Writer {
     fn reference(&self, value: &ValueRef) -> Result<Expression> {
         let (root, path) = match value.root() {
             ValueRoot::SelfValue | ValueRoot::Named(_) | ValueRoot::Local(_) => {
-                (self.root.clone(), value.path())
+                let path = value.path().strip_prefix(self.root_path.as_slice()).ok_or(
+                    Error::UnsupportedTarget {
+                        target: "ruby",
+                        shape: "codec value path",
+                    },
+                )?;
+                (self.root.clone(), path)
             }
             _ => return unsupported("codec value root"),
         };
@@ -63,11 +87,11 @@ impl Writer {
     }
 }
 
-impl CodecWrite for Writer {
+impl CodecWrite for Writer<'_, '_> {
     type Stmt = Result<Statement>;
 
-    fn primitive(&mut self, _: Primitive, _: &ValueRef) -> Vec<Self::Stmt> {
-        vec![unsupported("encoded scalar")]
+    fn primitive(&mut self, primitive: Primitive, value: &ValueRef) -> Vec<Self::Stmt> {
+        self.call(PrimitiveSymbols::new(primitive).writer(), value)
     }
 
     fn string(&mut self, value: &ValueRef) -> Vec<Self::Stmt> {
@@ -90,12 +114,13 @@ impl CodecWrite for Writer {
         self.call(Identifier::parse("boltffi_ruby_write_binary"), value)
     }
 
-    fn direct_record(&mut self, _: RecordId, _: &ValueRef) -> Vec<Self::Stmt> {
-        vec![unsupported("record")]
+    fn direct_record(&mut self, id: RecordId, value: &ValueRef) -> Vec<Self::Stmt> {
+        let writer = RecordSymbols::new(id, self.context).map(|symbols| symbols.writer().clone());
+        self.call(writer, value)
     }
 
-    fn encoded_record(&mut self, _: RecordId, _: &ValueRef) -> Vec<Self::Stmt> {
-        vec![unsupported("record")]
+    fn encoded_record(&mut self, id: RecordId, value: &ValueRef) -> Vec<Self::Stmt> {
+        self.direct_record(id, value)
     }
 
     fn c_style_enum(&mut self, _: EnumId, _: &ValueRef) -> Vec<Self::Stmt> {

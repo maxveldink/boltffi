@@ -4,14 +4,17 @@
 //! `VALUE` into a destination.
 
 use boltffi_binding::{
-    BuiltinType, CallbackId, ClassId, CodecRead, CustomTypeId, ElementCount, EnumId, MapKind, Op,
-    Primitive, ReadPlan, RecordId,
+    BuiltinType, CallbackId, ClassId, CodecRead, CustomTypeId, ElementCount, EnumId, MapKind,
+    Native, Op, Primitive, ReadPlan, RecordId,
 };
 
 use crate::{
     bridge::c::{Identifier, Statement},
-    core::Result,
-    target::ruby::cext::support::unsupported,
+    core::{RenderContext, Result},
+    target::ruby::cext::{
+        support::unsupported,
+        symbol::{PrimitiveSymbols, RecordSymbols},
+    },
 };
 
 /// Placeholder that a parent replaces with the destination of the value.
@@ -33,9 +36,15 @@ impl Decoded {
 }
 
 /// Renders decode statements for codec trees.
-pub struct Reader;
+pub struct Reader<'context, 'bindings> {
+    context: &'context RenderContext<'bindings, Native>,
+}
 
-impl Reader {
+impl<'context, 'bindings> Reader<'context, 'bindings> {
+    pub fn new(context: &'context RenderContext<'bindings, Native>) -> Self {
+        Self { context }
+    }
+
     /// Renders statements that decode `plan` from `reader` into `destination`.
     pub fn decode(&mut self, plan: &ReadPlan, destination: &str) -> Result<Statement> {
         plan.render_with(self)
@@ -47,11 +56,11 @@ impl Reader {
     }
 }
 
-impl CodecRead for Reader {
+impl CodecRead for Reader<'_, '_> {
     type Expr = Result<Decoded>;
 
-    fn primitive(&mut self, _: Primitive) -> Self::Expr {
-        unsupported("encoded scalar")
+    fn primitive(&mut self, primitive: Primitive) -> Self::Expr {
+        Ok(Self::call(&PrimitiveSymbols::new(primitive).reader()?))
     }
 
     fn string(&mut self) -> Self::Expr {
@@ -74,12 +83,12 @@ impl CodecRead for Reader {
         Ok(Self::call(&Identifier::parse("boltffi_ruby_read_binary")?))
     }
 
-    fn direct_record(&mut self, _: RecordId) -> Self::Expr {
-        unsupported("record")
+    fn direct_record(&mut self, id: RecordId) -> Self::Expr {
+        Ok(Self::call(RecordSymbols::new(id, self.context)?.reader()))
     }
 
-    fn encoded_record(&mut self, _: RecordId) -> Self::Expr {
-        unsupported("record")
+    fn encoded_record(&mut self, id: RecordId) -> Self::Expr {
+        self.direct_record(id)
     }
 
     fn c_style_enum(&mut self, _: EnumId) -> Self::Expr {

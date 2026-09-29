@@ -9,7 +9,7 @@ use crate::{
     target::ruby::{name_style::NameScope, syntax::ConstantPath},
 };
 
-use super::function;
+use super::{function, record};
 
 #[derive(Template)]
 #[template(path = "target/ruby/extension.c", escape = "none")]
@@ -19,7 +19,15 @@ struct ExtensionTemplate {
     nested: Vec<Literal>,
     forward_declarations: Vec<String>,
     definitions: Vec<String>,
+    records: Vec<RecordClass>,
     functions: Vec<ModuleFunction>,
+}
+
+/// One `Data` class that `Init_` defines.
+struct RecordClass {
+    class: Identifier,
+    constant: Literal,
+    members: Vec<Literal>,
 }
 
 /// One module function that `Init_` defines.
@@ -58,19 +66,37 @@ fn source(
         .ok_or(Error::InvalidRubyIdentifier {
             identifier: module.to_string(),
         })?;
+    let mut constants = NameScope::new(format!("module `{module}` constants"));
     let mut methods = NameScope::new(format!("module `{module}` functions"));
     let mut forward_declarations = Vec::new();
     let mut definitions = Vec::new();
+    let mut records = Vec::new();
     let mut functions = Vec::new();
     for rendered in declarations {
-        if let DeclarationRef::Function(declaration) = rendered.declaration() {
-            let registration = function::Registration::from_declaration(declaration)?;
-            methods.claim(registration.ruby_name.as_str(), registration.subject)?;
-            functions.push(ModuleFunction {
-                name: Literal::string(registration.ruby_name.as_str()),
-                wrapper: registration.wrapper,
-                arity: registration.arity,
-            });
+        match rendered.declaration() {
+            DeclarationRef::Record(declaration) => {
+                let registration = record::Registration::from_declaration(declaration)?;
+                constants.claim(registration.constant.as_str(), registration.subject)?;
+                records.push(RecordClass {
+                    class: registration.class,
+                    constant: Literal::string(registration.constant.as_str()),
+                    members: registration
+                        .members
+                        .iter()
+                        .map(|member| Literal::string(member.as_str()))
+                        .collect(),
+                });
+            }
+            DeclarationRef::Function(declaration) => {
+                let registration = function::Registration::from_declaration(declaration)?;
+                methods.claim(registration.ruby_name.as_str(), registration.subject)?;
+                functions.push(ModuleFunction {
+                    name: Literal::string(registration.ruby_name.as_str()),
+                    wrapper: registration.wrapper,
+                    arity: registration.arity,
+                });
+            }
+            _ => {}
         }
         let (primary, aux, _) = rendered.into_parts().1.into_parts();
         forward_declarations.extend(aux.into_iter().filter_map(|chunk| match chunk {
@@ -90,6 +116,7 @@ fn source(
             .collect(),
         forward_declarations,
         definitions,
+        records,
         functions,
     }
     .render()?;

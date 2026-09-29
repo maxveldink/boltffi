@@ -8,7 +8,7 @@
 use askama::Template;
 use boltffi_binding::{
     DirectValueType, ErrorDecl, ExecutionDecl, FunctionDecl, IncomingParam, IntoRust, Native,
-    OutOfRust, ParamDecl, ParamPlan, Primitive, Receive, ReturnPlan, native,
+    OutOfRust, ParamDecl, ParamPlan, Primitive, Receive, RecordId, ReturnPlan, native,
 };
 
 use crate::{
@@ -16,12 +16,12 @@ use crate::{
         ArgumentList, CBridgeContract, Expression, Identifier, Parameter, Statement, Type,
         TypeFragment,
     },
-    core::{Emitted, Error, Result},
+    core::{Emitted, Error, RenderContext, Result},
     target::ruby::{
         cext::{
             codec::{read::Reader, write::Writer},
-            support::unsupported,
-            symbol::PrimitiveSymbols,
+            support::{Support, unsupported},
+            symbol::{PrimitiveSymbols, RecordSymbols},
         },
         name_style::{Name, spelling},
         syntax::Identifier as RubyIdentifier,
@@ -71,6 +71,9 @@ struct Argument {
     values: Vec<Expression>,
     cleanup: Vec<Statement>,
     /// Rust decodes this argument from encoded bytes, so decoding can fail.
+    ///
+    /// Rust also checks a record passed by reference, but that check cannot
+    /// fail here: the wrapper passes a valid pointer.
     encoded: bool,
 }
 
@@ -78,6 +81,7 @@ impl Function {
     pub fn from_declaration(
         declaration: &FunctionDecl<Native>,
         bridge: &CBridgeContract,
+        context: &RenderContext<Native>,
     ) -> Result<Self> {
         let callable = declaration.callable();
         if matches!(callable.execution(), ExecutionDecl::Asynchronous(_)) {
@@ -103,7 +107,13 @@ impl Function {
                 } else {
                     format!("boltffi_arg_{index}")
                 });
-                Argument::from_param(ArgumentSlot { index, value }, param, &mut abi_params)
+                Argument::from_param(
+                    ArgumentSlot { index, value },
+                    param,
+                    &mut abi_params,
+                    bridge,
+                    context,
+                )
             })
             .collect::<Result<Vec<_>>>()?;
         if abi_params.next().is_some() {
@@ -124,6 +134,8 @@ impl Function {
             callable.returns().plan(),
             &registration.wrapper,
             abi.returns(),
+            bridge,
+            context,
         )?;
         let (call, result) = conversion.call(&native_call);
         let check = arguments
@@ -189,6 +201,8 @@ impl Argument {
         slot: ArgumentSlot,
         param: &ParamDecl<Native, IntoRust>,
         abi: &mut impl Iterator<Item = &'abi Parameter>,
+        bridge: &CBridgeContract,
+        context: &RenderContext<Native>,
     ) -> Result<Self> {
         let plan = match param.payload() {
             IncomingParam::Value(plan) => plan,
@@ -208,6 +222,19 @@ impl Argument {
                 next_abi()?;
                 Self::primitive(&slot, *primitive)
             }
+            ParamPlan::Direct {
+                ty: DirectValueType::Record(record),
+                receive: receive @ (Receive::ByValue | Receive::ByRef),
+            } => {
+                let by_pointer = matches!(next_abi()?.ty(), Type::ConstPointer(_));
+                if by_pointer != matches!(receive, Receive::ByRef) {
+                    return Err(Error::BrokenBridgeContract {
+                        bridge: "c",
+                        invariant: "direct record parameter passing does not match its C type",
+                    });
+                }
+                Self::direct_record(&slot, *record, by_pointer, bridge, context)
+            }
             ParamPlan::Encoded {
                 codec,
                 shape: native::BufferShape::Slice,
@@ -216,7 +243,8 @@ impl Argument {
             } => {
                 next_abi()?;
                 next_abi()?;
-                let statements = Writer::new(slot.value.clone()).encode(codec)?;
+                Support::new(context).codec(&codec.read_plan())?;
+                let statements = Writer::new(context, slot.value.clone()).encode(codec)?;
                 Ok(Self::encoded(&slot, statements))
             }
             ParamPlan::Direct {
@@ -251,6 +279,31 @@ impl Argument {
                 slot.value
             ))],
             values: vec![Expression::new(local)],
+            ..Self::default()
+        })
+    }
+
+    fn direct_record(
+        slot: &ArgumentSlot,
+        record: RecordId,
+        by_pointer: bool,
+        bridge: &CBridgeContract,
+        context: &RenderContext<Native>,
+    ) -> Result<Self> {
+        let symbols = RecordSymbols::new(record, context)?;
+        let c_type = direct_record_type(record, bridge)?;
+        let local = format!("boltffi_value_{}", slot.index);
+        Ok(Self {
+            setup: vec![Statement::new(format!(
+                "{c_type} {local} = {}({});",
+                symbols.unboxer(),
+                slot.value
+            ))],
+            values: vec![Expression::new(if by_pointer {
+                format!("&{local}")
+            } else {
+                local
+            })],
             ..Self::default()
         })
     }
@@ -301,6 +354,8 @@ impl ReturnConversion {
         plan: &ReturnPlan<Native, OutOfRust>,
         wrapper: &Identifier,
         abi_return: &Type,
+        bridge: &CBridgeContract,
+        context: &RenderContext<Native>,
     ) -> Result<Self> {
         let decoder = || Identifier::parse(format!("{wrapper}_decode"));
         match plan {
@@ -314,12 +369,19 @@ impl ReturnConversion {
                     convert: symbols.c_to_ruby()?,
                 }))
             }
+            ReturnPlan::DirectViaReturnSlot {
+                ty: DirectValueType::Record(record),
+            } => Ok(Self::plain(ReturnKind::Direct {
+                c_type: direct_record_type(*record, bridge)?,
+                convert: RecordSymbols::new(*record, context)?.boxer().clone(),
+            })),
             ReturnPlan::EncodedViaReturnSlot {
                 codec,
                 shape: native::BufferShape::Buffer,
                 ..
             } => {
-                let body = Reader.decode(codec, "boltffi_value")?;
+                Support::new(context).codec(codec)?;
+                let body = Reader::new(context).decode(codec, "boltffi_value")?;
                 Self::owned(decoder()?, body, abi_return)
             }
             ReturnPlan::DirectViaReturnSlot {
@@ -379,4 +441,15 @@ impl ReturnConversion {
             ),
         }
     }
+}
+
+/// Returns the C typedef the bridge emits for a direct record.
+pub fn direct_record_type(record: RecordId, bridge: &CBridgeContract) -> Result<TypeFragment> {
+    bridge
+        .source_direct_record(record)
+        .map(|record| TypeFragment::new(record.name()))
+        .ok_or(Error::BrokenBridgeContract {
+            bridge: "c",
+            invariant: "direct record has no C typedef",
+        })
 }

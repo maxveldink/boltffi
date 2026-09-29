@@ -11,6 +11,11 @@ RUBY_FUNC_EXPORTED void {{ init }}(void) {
 {%- for constant in nested %}
     boltffi_module = rb_define_module_under(boltffi_module, {{ constant }});
 {%- endfor %}
+{%- for record in records %}
+    rb_global_variable(&{{ record.class }});
+    {{ record.class }} = rb_data_define(0{% for member in record.members %}, {{ member }}{% endfor %}, NULL);
+    rb_define_const(boltffi_module, {{ record.constant }}, {{ record.class }});
+{%- endfor %}
 {%- for function in functions %}
     rb_define_module_function(boltffi_module, {{ function.name }}, {{ function.wrapper }}, {{ function.arity }});
 {%- endfor %}
