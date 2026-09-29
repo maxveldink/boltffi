@@ -71,6 +71,11 @@ HARNESS_SOURCES: tuple[HarnessSource, ...] = (
         pattern=re.compile(r'BenchmarkCase\(\s*"([^"]+)"'),
     ),
     HarnessSource(
+        name="ruby_bench",
+        path=REPO_ROOT / "benchmarks/harnesses/ruby-bench/bench.rb",
+        pattern=re.compile(r'Case\.new\(\s*"([^"]+)"'),
+    ),
+    HarnessSource(
         name="dotnet_benchmarkdotnet",
         path=(
             REPO_ROOT / "benchmarks/harnesses/dotnet-bench/WireReaderBenchmarks.cs",

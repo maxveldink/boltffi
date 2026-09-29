@@ -232,6 +232,18 @@ bench-python *args:
         ./run-bench.sh
     fi
 
+# Ruby benchmark - builds the BoltFFI Ruby gem and times its C extension.
+# Pass `--yjit` to run with YJIT, or `--uniffi-dir <dir>` to add a UniFFI Ruby build.
+bench-ruby *args:
+    #!/usr/bin/env bash
+    set -e
+    cd benchmarks/harnesses/ruby-bench
+    if [ -n "{{ args }}" ]; then
+        ./run-bench.sh {{ args }}
+    else
+        ./run-bench.sh
+    fi
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Clean
 # ─────────────────────────────────────────────────────────────────────────────

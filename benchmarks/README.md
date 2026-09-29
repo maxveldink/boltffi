@@ -6,6 +6,7 @@ Cross-language FFI performance suite. BoltFFI is compared against:
 - **Java (JVM)**: [uniffi-bindgen-java](https://github.com/IronCoreLabs/uniffi-bindgen-java) (FFM) and UniFFI (Kotlin/JNA)
 - **WASM (Node.js)**: wasm-bindgen
 - **C# (.NET)**: UniFFI (via [uniffi-bindgen-cs](https://github.com/NordSecurity/uniffi-bindgen-cs))
+- **Ruby**: no baseline yet. UniFFI's Ruby backend cannot generate bindings for `examples/demo`, because it does not support callback interfaces. `bench.rb` accepts `--uniffi-dir` for a UniFFI Ruby build of a crate without them.
 
 Every backend wraps the **same Rust code** with identical public APIs, so the only variable is FFI overhead.
 
@@ -49,6 +50,7 @@ benchmarks/
 │   ├── kotlin-jvm-bench/
 │   ├── java-jvm-bench/
 │   ├── python-bench/
+│   ├── ruby-bench/
 │   ├── wasm-bench/
 │   └── dotnet-bench/
 └── scripts/               # Catalog, inventory, audit, normalization, publishing
@@ -66,6 +68,7 @@ Locally, each harness writes a raw report plus a normalized `benchmark_run.json`
 | Kotlin JMH     | `harnesses/kotlin-jvm-bench/build/results/jmh/report.txt`    | `.../benchmark_run.json` |
 | Java JMH       | `harnesses/java-jvm-bench/build/results/jmh/results.json`    | `.../benchmark_run.json` |
 | Python pyperf  | `harnesses/python-bench/build/results/pyperf/results.json`   | `.../benchmark_run.json` |
+| Ruby           | `harnesses/ruby-bench/build/results/ruby/<mode>/results.json` | `.../benchmark_run.json` |
 | WASM           | `harnesses/wasm-bench/build/results/benchmarkjs/`            | `.../benchmark_run.json` |
 | .NET           | `harnesses/dotnet-bench/build/results/dotnet/results.json`   | `.../benchmark_run.json` |
 
@@ -103,6 +106,7 @@ The release workflow calls the `run-*.sh` scripts directly; you can do the same 
 | Kotlin JMH (JVM)    | `just bench-kotlin`         | Builds Android-arch JNI libs, runs JMH                |
 | Java FFM JMH (JVM)  | `just bench-java`           | Builds uniffi-bindgen-java bindings, runs JMH         |
 | Python (pyperf)     | `just bench-python`         | Builds BoltFFI + UniFFI Python bindings, runs pyperf  |
+| Ruby                | `just bench-ruby`           | Builds the BoltFFI Ruby gem; pass `--yjit` for YJIT   |
 | WASM (Node.js)      | `just bench-wasm`           | Builds both BoltFFI and wasm-bindgen wasm outputs     |
 | C# (.NET)           | `just bench-csharp`         | BenchmarkDotNet; pass filters after `--`              |
 | iOS                 | `just bench-build-ios`      | Produces xcframework; open the Xcode project to run   |
@@ -139,6 +143,7 @@ Benchmarks are defined in Rust in `examples/demo`. You do **not** touch separate
    - Kotlin (JNI + JNA/UniFFI): [`harnesses/kotlin-jvm-bench/src/main/kotlin/com/example/bench_compare/JmhBenchmarks.kt`](./harnesses/kotlin-jvm-bench/src/main/kotlin/com/example/bench_compare/JmhBenchmarks.kt)
    - Java FFM: [`harnesses/java-jvm-bench/src/jmh/java/com/example/bench_compare/{BoltffiJavaBench,UniffiJavaBench}.java`](./harnesses/java-jvm-bench/src/jmh/java/com/example/bench_compare)
    - Python: [`harnesses/python-bench/bench.py`](./harnesses/python-bench/bench.py)
+   - Ruby: [`harnesses/ruby-bench/bench.rb`](./harnesses/ruby-bench/bench.rb)
    - WASM: [`harnesses/wasm-bench/bench.mjs`](./harnesses/wasm-bench/bench.mjs)
    - .NET: [`harnesses/dotnet-bench/{WireReaderBenchmarks,EnumWireBenchmarks}.cs`](./harnesses/dotnet-bench)
    - iOS / Android: the harness apps under [`harnesses/ios-app`](./harnesses/ios-app) and [`harnesses/android-app`](./harnesses/android-app)

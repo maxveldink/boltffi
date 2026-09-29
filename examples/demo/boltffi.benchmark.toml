@@ -66,3 +66,8 @@ output = "../../benchmarks/generated/boltffi/dist/csharp"
 [targets.python]
 enabled = true
 output = "../../benchmarks/generated/boltffi/dist/python"
+
+[targets.ruby]
+enabled = true
+output = "../../benchmarks/generated/boltffi/dist/ruby"
+module_name = "BenchBoltFFI"
