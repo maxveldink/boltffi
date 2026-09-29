@@ -45,12 +45,7 @@ pub fn echo_vec_i8(v: Vec<i8>) -> Vec<i8> {
 #[demo_bench_macros::demo_case(
     "primitives.vecs.u8.should_roundtrip_values",
     justification = "Ensure a non-empty u8 vector crosses the wire and returns unchanged.",
-    directions = "Call `primitives::vecs::echo_vec_u8` through the generated binding and assert a non-empty u8 vector crosses the wire and returns unchanged.",
-    exclude(
-        ruby,
-        reason = ExclusionReason::ImplementationGap,
-        details = "the Ruby target does not move strings or bytes yet"
-    )
+    directions = "Call `primitives::vecs::echo_vec_u8` through the generated binding and assert a non-empty u8 vector crosses the wire and returns unchanged."
 )]
 #[export]
 pub fn echo_vec_u8(v: Vec<u8>) -> Vec<u8> {

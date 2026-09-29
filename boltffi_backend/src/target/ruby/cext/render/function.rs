@@ -8,16 +8,21 @@
 use askama::Template;
 use boltffi_binding::{
     DirectValueType, ErrorDecl, ExecutionDecl, FunctionDecl, IncomingParam, IntoRust, Native,
-    OutOfRust, ParamDecl, ParamPlan, Primitive, Receive, ReturnPlan,
+    OutOfRust, ParamDecl, ParamPlan, Primitive, Receive, ReturnPlan, native,
 };
 
 use crate::{
     bridge::c::{
-        ArgumentList, CBridgeContract, Expression, Identifier, Parameter, Statement, TypeFragment,
+        ArgumentList, CBridgeContract, Expression, Identifier, Parameter, Statement, Type,
+        TypeFragment,
     },
     core::{Emitted, Error, Result},
     target::ruby::{
-        cext::{support::unsupported, symbol::PrimitiveSymbols},
+        cext::{
+            codec::{read::Reader, write::Writer},
+            support::unsupported,
+            symbol::PrimitiveSymbols,
+        },
         name_style::{Name, spelling},
         syntax::Identifier as RubyIdentifier,
     },
@@ -38,7 +43,10 @@ pub struct Function {
     arity: usize,
     setup: Vec<Statement>,
     call: Statement,
+    cleanup: Vec<Statement>,
+    check: Option<Statement>,
     result: Expression,
+    decoder: Option<Decoder>,
 }
 
 /// The `rb_define_module_function` call for one rendered function.
@@ -50,10 +58,20 @@ pub struct Registration {
     pub subject: String,
 }
 
+/// A C function that decodes the buffer a function returns.
+struct Decoder {
+    name: Identifier,
+    body: Statement,
+}
+
 /// C code that moves one argument into native call slots.
+#[derive(Default)]
 struct Argument {
     setup: Vec<Statement>,
     values: Vec<Expression>,
+    cleanup: Vec<Statement>,
+    /// Rust decodes this argument from encoded bytes, so decoding can fail.
+    encoded: bool,
 }
 
 impl Function {
@@ -102,18 +120,31 @@ impl Function {
                     .flat_map(|argument| argument.values.iter().cloned()),
             ),
         );
-        let conversion = ReturnConversion::from_plan(callable.returns().plan())?;
+        let conversion = ReturnConversion::from_plan(
+            callable.returns().plan(),
+            &registration.wrapper,
+            abi.returns(),
+        )?;
         let (call, result) = conversion.call(&native_call);
+        let check = arguments
+            .iter()
+            .any(|argument| argument.encoded)
+            .then(|| conversion.check());
         let mut setup = Vec::new();
+        let mut cleanup = Vec::new();
         for argument in arguments {
             setup.extend(argument.setup);
+            cleanup.extend(argument.cleanup);
         }
         Ok(Self {
             wrapper: registration.wrapper,
             arity: callable.params().len(),
             setup,
             call,
+            cleanup,
+            check,
             result,
+            decoder: conversion.decoder,
         })
     }
 
@@ -177,6 +208,17 @@ impl Argument {
                 next_abi()?;
                 Self::primitive(&slot, *primitive)
             }
+            ParamPlan::Encoded {
+                codec,
+                shape: native::BufferShape::Slice,
+                receive: Receive::ByValue | Receive::ByRef,
+                ..
+            } => {
+                next_abi()?;
+                next_abi()?;
+                let statements = Writer::new(slot.value.clone()).encode(codec)?;
+                Ok(Self::encoded(&slot, statements))
+            }
             ParamPlan::Direct {
                 ty: DirectValueType::Enum(_),
                 ..
@@ -209,13 +251,38 @@ impl Argument {
                 slot.value
             ))],
             values: vec![Expression::new(local)],
+            ..Self::default()
         })
+    }
+
+    fn encoded(slot: &ArgumentSlot, statements: Statement) -> Self {
+        let writer = format!("boltffi_writer_{}", slot.index);
+        Self {
+            setup: vec![
+                Statement::new(format!("boltffi_ruby_writer {writer};")),
+                Statement::new(format!("boltffi_ruby_writer_init(&{writer});")),
+                Statement::new(format!(
+                    "{{\nboltffi_ruby_writer *writer = &{writer};\n{statements}\n}}"
+                )),
+            ],
+            values: Self::writer_values(&writer),
+            cleanup: vec![Statement::new(format!("RB_GC_GUARD({writer}.heap);"))],
+            encoded: true,
+        }
+    }
+
+    fn writer_values(writer: &str) -> Vec<Expression> {
+        vec![
+            Expression::new(format!("{writer}.ptr")),
+            Expression::new(format!("{writer}.len")),
+        ]
     }
 }
 
 /// How the wrapper turns the native return slot into a Ruby value.
 struct ReturnConversion {
     kind: ReturnKind,
+    decoder: Option<Decoder>,
 }
 
 enum ReturnKind {
@@ -224,10 +291,18 @@ enum ReturnKind {
         c_type: TypeFragment,
         convert: Identifier,
     },
+    Owned {
+        decoder: Identifier,
+    },
 }
 
 impl ReturnConversion {
-    fn from_plan(plan: &ReturnPlan<Native, OutOfRust>) -> Result<Self> {
+    fn from_plan(
+        plan: &ReturnPlan<Native, OutOfRust>,
+        wrapper: &Identifier,
+        abi_return: &Type,
+    ) -> Result<Self> {
+        let decoder = || Identifier::parse(format!("{wrapper}_decode"));
         match plan {
             ReturnPlan::Void => Ok(Self::plain(ReturnKind::Void)),
             ReturnPlan::DirectViaReturnSlot {
@@ -239,6 +314,14 @@ impl ReturnConversion {
                     convert: symbols.c_to_ruby()?,
                 }))
             }
+            ReturnPlan::EncodedViaReturnSlot {
+                codec,
+                shape: native::BufferShape::Buffer,
+                ..
+            } => {
+                let body = Reader.decode(codec, "boltffi_value")?;
+                Self::owned(decoder()?, body, abi_return)
+            }
             ReturnPlan::DirectViaReturnSlot {
                 ty: DirectValueType::Enum(_),
             } => unsupported("enum return"),
@@ -248,7 +331,33 @@ impl ReturnConversion {
     }
 
     fn plain(kind: ReturnKind) -> Self {
-        Self { kind }
+        Self {
+            kind,
+            decoder: None,
+        }
+    }
+
+    fn owned(name: Identifier, body: Statement, abi_return: &Type) -> Result<Self> {
+        if !matches!(abi_return, Type::Buffer) {
+            return Err(Error::BrokenBridgeContract {
+                bridge: "c",
+                invariant: "encoded return does not use a FfiBuf_u8 return slot",
+            });
+        }
+        Ok(Self {
+            kind: ReturnKind::Owned {
+                decoder: name.clone(),
+            },
+            decoder: Some(Decoder { name, body }),
+        })
+    }
+
+    /// Returns the statement that raises when Rust rejected an argument.
+    fn check(&self) -> Statement {
+        Statement::new(match self.kind {
+            ReturnKind::Owned { .. } => "boltffi_ruby_check_arguments(&boltffi_result);",
+            ReturnKind::Void | ReturnKind::Direct { .. } => "boltffi_ruby_check_arguments(NULL);",
+        })
     }
 
     /// Returns the call statement and the Ruby result expression.
@@ -261,6 +370,12 @@ impl ReturnConversion {
             ReturnKind::Direct { c_type, convert } => (
                 Statement::new(format!("{c_type} boltffi_result = {native_call};")),
                 Expression::new(format!("{convert}(boltffi_result)")),
+            ),
+            ReturnKind::Owned { decoder } => (
+                Statement::new(format!("FfiBuf_u8 boltffi_result = {native_call};")),
+                Expression::new(format!(
+                    "boltffi_ruby_decode_owned(boltffi_result, {decoder})"
+                )),
             ),
         }
     }

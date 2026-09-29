@@ -41,6 +41,32 @@ class ConversionsTest < Minitest::Test
     assert_raises(TypeError) { Demo.echo_bool(1) }
   end
 
+  def test_strings_must_be_valid_utf8
+    error = assert_raises(ArgumentError) { Demo.echo_string("\xff") }
+    assert_match(/invalid byte sequence in UTF-8/, error.message)
+    assert_raises(Encoding::CompatibilityError) { Demo.echo_string("caf\u00e9".b) }
+    assert_raises(Encoding::CompatibilityError) { Demo.echo_string("caf\u00e9".encode("ISO-8859-1")) }
+    assert_raises(TypeError) { Demo.echo_string(:symbol) }
+  end
+
   # Encoding runs no Ruby code: a `to_str` method could change a Hash or an
   # Array after the extension wrote its size.
+  def test_ascii_only_strings_pass_in_any_ascii_compatible_encoding
+    assert_equal("abc", Demo.echo_string("abc".b))
+    assert_equal("abc", Demo.echo_string("abc".encode("US-ASCII")))
+  end
+
+  def test_returned_strings_are_utf8
+    result = Demo.echo_string("caf\u00e9")
+
+    assert_equal(Encoding::UTF_8, result.encoding)
+    assert_predicate(result, :valid_encoding?)
+    assert_predicate(Demo.echo_string("plain"), :ascii_only?)
+  end
+
+  def test_functions_use_fixed_arity
+    assert_equal(1, Demo.method(:echo_string).arity)
+    assert_raises(ArgumentError) { Demo.echo_string }
+    assert_raises(ArgumentError) { Demo.echo_string("a", "b") }
+  end
 end

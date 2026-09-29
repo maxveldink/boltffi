@@ -2,15 +2,15 @@
 //!
 //! The Ruby target renders a C extension that links the Rust static library
 //! and calls the shared C ABI (`CBridge`) directly. Every value crosses as a
-//! plain Ruby object: `Integer`, `Float`, or `true`/`false`. The extension
-//! builds those objects eagerly, so Ruby code, and YJIT, see ordinary Ruby
-//! values.
+//! plain Ruby object: `Integer`, `Float`, `true`/`false`, or `String`. The
+//! extension builds those objects eagerly, so Ruby code, and YJIT, see
+//! ordinary Ruby values.
 //!
-//! The target renders synchronous free functions with scalar arguments and
-//! results. Strings, bytes, records, options, collections, enums, classes,
-//! callbacks, streams, async functions, constants, custom types, and fallible
-//! functions are not supported yet.
+//! The target renders synchronous free functions. Records, options,
+//! collections, enums, classes, callbacks, streams, async functions,
+//! constants, custom types, and fallible functions are not supported yet.
 
+mod codec;
 mod render;
 mod runtime;
 mod support;
@@ -349,6 +349,28 @@ mod tests {
         );
 
         insta::assert_snapshot!("ruby_scalar_functions", file(&output, "ext/demo/demo.c"));
+    }
+
+    #[test]
+    fn ruby_target_renders_string_and_bytes_functions() {
+        let output = render(
+            RubyCExtHost::new(),
+            r#"
+            #[export]
+            pub fn greet(name: String) -> String { format!("hi {name}") }
+
+            #[export]
+            pub fn echo_bytes(data: Vec<u8>) -> Vec<u8> { data }
+
+            #[export]
+            pub fn length(text: String) -> u32 { text.len() as u32 }
+            "#,
+        );
+
+        insta::assert_snapshot!(
+            "ruby_string_and_bytes_functions",
+            file(&output, "ext/demo/demo.c")
+        );
     }
 
     #[test]
