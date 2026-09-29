@@ -1,3 +1,7 @@
+{%- for helper in function.helpers %}
+{{ helper }}
+
+{% endfor -%}
 {%- if let Some(decoder) = function.decoder %}
 static VALUE {{ decoder.name }}(boltffi_ruby_reader *reader) {
     VALUE boltffi_value = Qnil;

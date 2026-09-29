@@ -36,6 +36,10 @@ BOLTFFI_RUBY_MAYBE_UNUSED static void {{ record.symbols.writer() }}(boltffi_ruby
     boltffi_ruby_write_raw(writer, &record, sizeof(record));
 }
 {%- when Body::Encoded(encoded) %}
+{%- for helper in encoded.helpers %}
+
+{{ helper }}
+{%- endfor %}
 
 BOLTFFI_RUBY_MAYBE_UNUSED static VALUE {{ record.symbols.reader() }}(boltffi_ruby_reader *reader) {
     VALUE boltffi_fields[{{ record.value_slots() }}] = { Qnil };

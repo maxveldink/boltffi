@@ -7,8 +7,9 @@
 
 use askama::Template;
 use boltffi_binding::{
-    DirectValueType, ErrorDecl, ExecutionDecl, FunctionDecl, IncomingParam, IntoRust, Native,
-    OutOfRust, ParamDecl, ParamPlan, Primitive, Receive, RecordId, ReturnPlan, native,
+    DirectValueType, DirectVectorElementType, ErrorDecl, ExecutionDecl, FunctionDecl,
+    IncomingParam, IntoRust, Native, OutOfRust, ParamDecl, ParamPlan, Primitive, Receive, RecordId,
+    ReturnPlan, native,
 };
 
 use crate::{
@@ -46,6 +47,7 @@ pub struct Function {
     cleanup: Vec<Statement>,
     check: Option<Statement>,
     result: Expression,
+    helpers: Vec<String>,
     decoder: Option<Decoder>,
 }
 
@@ -70,10 +72,12 @@ struct Argument {
     setup: Vec<Statement>,
     values: Vec<Expression>,
     cleanup: Vec<Statement>,
+    helpers: Vec<String>,
     /// Rust decodes this argument from encoded bytes, so decoding can fail.
     ///
-    /// Rust also checks a record passed by reference, but that check cannot
-    /// fail here: the wrapper passes a valid pointer.
+    /// Rust also checks the other argument kinds, but those checks cannot
+    /// fail here: the wrapper passes a valid pointer for a record passed by
+    /// reference, and an exact byte count for a vector of records.
     encoded: bool,
 }
 
@@ -108,7 +112,11 @@ impl Function {
                     format!("boltffi_arg_{index}")
                 });
                 Argument::from_param(
-                    ArgumentSlot { index, value },
+                    ArgumentSlot {
+                        index,
+                        value,
+                        wrapper: &registration.wrapper,
+                    },
                     param,
                     &mut abi_params,
                     bridge,
@@ -144,9 +152,11 @@ impl Function {
             .then(|| conversion.check());
         let mut setup = Vec::new();
         let mut cleanup = Vec::new();
+        let mut helpers = Vec::new();
         for argument in arguments {
             setup.extend(argument.setup);
             cleanup.extend(argument.cleanup);
+            helpers.extend(argument.helpers);
         }
         Ok(Self {
             wrapper: registration.wrapper,
@@ -156,6 +166,7 @@ impl Function {
             cleanup,
             check,
             result,
+            helpers,
             decoder: conversion.decoder,
         })
     }
@@ -191,14 +202,15 @@ impl Registration {
 }
 
 /// Where one Ruby argument comes from inside the wrapper.
-struct ArgumentSlot {
+struct ArgumentSlot<'wrapper> {
     index: usize,
     value: Expression,
+    wrapper: &'wrapper Identifier,
 }
 
 impl Argument {
     fn from_param<'abi>(
-        slot: ArgumentSlot,
+        slot: ArgumentSlot<'_>,
         param: &ParamDecl<Native, IntoRust>,
         abi: &mut impl Iterator<Item = &'abi Parameter>,
         bridge: &CBridgeContract,
@@ -244,8 +256,23 @@ impl Argument {
                 next_abi()?;
                 next_abi()?;
                 Support::new(context).codec(&codec.read_plan())?;
-                let statements = Writer::new(context, slot.value.clone()).encode(codec)?;
-                Ok(Self::encoded(&slot, statements))
+                let helper_prefix = format!("{}_arg{}", slot.wrapper, slot.index);
+                let mut writer = Writer::new(context, slot.value.clone(), helper_prefix);
+                let statements = writer.encode(codec)?;
+                Ok(Self::encoded(&slot, statements, writer.into_helpers()))
+            }
+            ParamPlan::ScalarOption { primitive } => {
+                next_abi()?;
+                next_abi()?;
+                Self::scalar_option(&slot, *primitive)
+            }
+            ParamPlan::DirectVec {
+                element,
+                receive: Receive::ByValue | Receive::ByRef,
+            } => {
+                next_abi()?;
+                next_abi()?;
+                Self::direct_vector(&slot, element, bridge, context)
             }
             ParamPlan::Direct {
                 ty: DirectValueType::Enum(_),
@@ -268,7 +295,7 @@ impl Argument {
         }
     }
 
-    fn primitive(slot: &ArgumentSlot, primitive: Primitive) -> Result<Self> {
+    fn primitive(slot: &ArgumentSlot<'_>, primitive: Primitive) -> Result<Self> {
         let symbols = PrimitiveSymbols::new(primitive);
         let local = format!("boltffi_value_{}", slot.index);
         Ok(Self {
@@ -284,7 +311,7 @@ impl Argument {
     }
 
     fn direct_record(
-        slot: &ArgumentSlot,
+        slot: &ArgumentSlot<'_>,
         record: RecordId,
         by_pointer: bool,
         bridge: &CBridgeContract,
@@ -308,7 +335,7 @@ impl Argument {
         })
     }
 
-    fn encoded(slot: &ArgumentSlot, statements: Statement) -> Self {
+    fn encoded(slot: &ArgumentSlot<'_>, statements: Statement, helpers: Vec<String>) -> Self {
         let writer = format!("boltffi_writer_{}", slot.index);
         Self {
             setup: vec![
@@ -320,8 +347,33 @@ impl Argument {
             ],
             values: Self::writer_values(&writer),
             cleanup: vec![Statement::new(format!("RB_GC_GUARD({writer}.heap);"))],
+            helpers,
             encoded: true,
         }
+    }
+
+    fn scalar_option(slot: &ArgumentSlot<'_>, primitive: Primitive) -> Result<Self> {
+        let write = PrimitiveSymbols::new(primitive).writer()?;
+        let writer = format!("boltffi_writer_{}", slot.index);
+        let value = &slot.value;
+        Ok(Self {
+            setup: vec![
+                Statement::new(format!("boltffi_ruby_writer {writer};")),
+                Statement::new(format!("boltffi_ruby_writer_init(&{writer});")),
+                Statement::new(format!(
+                    "if (NIL_P({value})) {{\n\
+                     boltffi_ruby_write_raw_u8(&{writer}, 0);\n\
+                     }} else {{\n\
+                     boltffi_ruby_write_raw_u8(&{writer}, 1);\n\
+                     {write}(&{writer}, {value});\n\
+                     }}"
+                )),
+            ],
+            values: Self::writer_values(&writer),
+            cleanup: vec![Statement::new(format!("RB_GC_GUARD({writer}.heap);"))],
+            helpers: Vec::new(),
+            encoded: true,
+        })
     }
 
     fn writer_values(writer: &str) -> Vec<Expression> {
@@ -329,6 +381,64 @@ impl Argument {
             Expression::new(format!("{writer}.ptr")),
             Expression::new(format!("{writer}.len")),
         ]
+    }
+
+    fn direct_vector(
+        slot: &ArgumentSlot<'_>,
+        element: &DirectVectorElementType,
+        bridge: &CBridgeContract,
+        context: &RenderContext<Native>,
+    ) -> Result<Self> {
+        // Argument locals start with the argument's name, so they never
+        // collide with the codec's locals, which end in a nesting depth.
+        let local = format!("boltffi_arg_{}", slot.index);
+        let (c_type, convert, values) = match element {
+            DirectVectorElementType::Primitive(primitive) => {
+                let symbols = PrimitiveSymbols::new(primitive.primitive());
+                (
+                    symbols.c_type()?,
+                    symbols.ruby_to_c()?,
+                    vec![
+                        Expression::new(format!("{local}_items")),
+                        Expression::new(format!("(uintptr_t){local}_count")),
+                    ],
+                )
+            }
+            DirectVectorElementType::Record(record) => {
+                let c_type = direct_record_type(*record, bridge)?;
+                let values = vec![
+                    Expression::new(format!("(const uint8_t *){local}_items")),
+                    Expression::new(format!("(uintptr_t){local}_count * sizeof({c_type})")),
+                ];
+                (
+                    c_type,
+                    RecordSymbols::new(*record, context)?.unboxer().clone(),
+                    values,
+                )
+            }
+            _ => return unsupported("direct vector element"),
+        };
+        Ok(Self {
+            setup: vec![
+                Statement::new(format!(
+                    "VALUE {local}_array = boltffi_ruby_expect_array({});",
+                    slot.value
+                )),
+                Statement::new(format!("long {local}_count = RARRAY_LEN({local}_array);")),
+                Statement::new(format!("VALUE {local}_storage = 0;")),
+                Statement::new(format!(
+                    "{c_type} *{local}_items = RB_ALLOCV_N({c_type}, {local}_storage, {local}_count);"
+                )),
+                Statement::new(format!(
+                    "for (long {local}_index = 0; {local}_index < {local}_count; {local}_index++) {{\n\
+                     {local}_items[{local}_index] = {convert}(rb_ary_entry({local}_array, {local}_index));\n\
+                     }}"
+                )),
+            ],
+            values,
+            cleanup: vec![Statement::new(format!("RB_ALLOCV_END({local}_storage);"))],
+            ..Self::default()
+        })
     }
 }
 
@@ -384,9 +494,43 @@ impl ReturnConversion {
                 let body = Reader::new(context).decode(codec, "boltffi_value")?;
                 Self::owned(decoder()?, body, abi_return)
             }
+            ReturnPlan::ScalarOptionViaReturnSlot {
+                primitive,
+                enum_target: None,
+            } => {
+                let read = PrimitiveSymbols::new(*primitive).reader()?;
+                let body = Statement::new(format!(
+                    "if (boltffi_ruby_read_option_tag(reader)) {{\n\
+                     boltffi_value = {read}(reader);\n\
+                     }}"
+                ));
+                Self::owned(decoder()?, body, abi_return)
+            }
+            ReturnPlan::DirectVecViaReturnSlot { element } => {
+                let (element_type, read) = match element {
+                    DirectVectorElementType::Primitive(primitive) => {
+                        let symbols = PrimitiveSymbols::new(primitive.primitive());
+                        (symbols.c_type()?, symbols.element_reader()?)
+                    }
+                    DirectVectorElementType::Record(record) => (
+                        direct_record_type(*record, bridge)?,
+                        RecordSymbols::new(*record, context)?.reader().clone(),
+                    ),
+                    _ => return unsupported("direct vector element"),
+                };
+                let body = Statement::new(format!(
+                    "long boltffi_count = boltffi_ruby_raw_count(reader, sizeof({element_type}));\n\
+                     boltffi_value = rb_ary_new_capa(boltffi_count);\n\
+                     for (long boltffi_index = 0; boltffi_index < boltffi_count; boltffi_index++) {{\n\
+                     rb_ary_push(boltffi_value, {read}(reader));\n\
+                     }}"
+                ));
+                Self::owned(decoder()?, body, abi_return)
+            }
             ReturnPlan::DirectViaReturnSlot {
                 ty: DirectValueType::Enum(_),
-            } => unsupported("enum return"),
+            }
+            | ReturnPlan::ScalarOptionViaReturnSlot { .. } => unsupported("enum return"),
             ReturnPlan::HandleViaReturnSlot { .. } => unsupported("handle return"),
             _ => unsupported("return value"),
         }

@@ -36,6 +36,23 @@ class ConversionsTest < Minitest::Test
 
   # Ruby warns when an Integer is too large for a Float. A warning hook is Ruby
   # code, and no Ruby code may run while an argument is encoded.
+  def test_integers_too_large_for_a_float_raise_without_a_warning
+    warnings = []
+    verbose = $VERBOSE
+    Warning.define_singleton_method(:warn) { |message, **| warnings << message }
+    $VERBOSE = true
+
+    assert_raises(RangeError) { Demo.echo_f64(1 << 1024) }
+    assert_raises(RangeError) { Demo.echo_vec_f64([1.0, 1 << 20_000]) }
+    assert_equal((1 << 1023).to_f, Demo.echo_f64(1 << 1023))
+    assert_equal(-Float::MAX, Demo.echo_f64(-Float::MAX.to_i))
+    assert_empty(warnings)
+    assert_equal(true, $VERBOSE)
+  ensure
+    $VERBOSE = verbose
+    Warning.singleton_class.remove_method(:warn)
+  end
+
   def test_booleans_are_strict
     assert_raises(TypeError) { Demo.echo_bool(nil) }
     assert_raises(TypeError) { Demo.echo_bool(1) }
@@ -51,6 +68,17 @@ class ConversionsTest < Minitest::Test
 
   # Encoding runs no Ruby code: a `to_str` method could change a Hash or an
   # Array after the extension wrote its size.
+  def test_strings_are_strict_and_never_call_to_str
+    convertible = Object.new
+    def convertible.to_str = raise("to_str must not run")
+    subclass = Class.new(String)
+
+    assert_raises(TypeError) { Demo.echo_string(convertible) }
+    assert_raises(TypeError) { Demo.echo_bytes(convertible) }
+    assert_raises(TypeError) { Demo.echo_hash_map({ convertible => [1] }) }
+    assert_equal("text", Demo.echo_string(subclass.new("text")))
+  end
+
   def test_ascii_only_strings_pass_in_any_ascii_compatible_encoding
     assert_equal("abc", Demo.echo_string("abc".b))
     assert_equal("abc", Demo.echo_string("abc".encode("US-ASCII")))
@@ -62,6 +90,35 @@ class ConversionsTest < Minitest::Test
     assert_equal(Encoding::UTF_8, result.encoding)
     assert_predicate(result, :valid_encoding?)
     assert_predicate(Demo.echo_string("plain"), :ascii_only?)
+  end
+
+  def test_large_values_cross_in_both_directions
+    text = "\u00e9" * 100_000
+    numbers = (1..50_000).to_a
+    names = Array.new(5_000) { |index| "name-#{index}" }
+
+    assert_equal(text, Demo.echo_string(text))
+    assert_equal(numbers, Demo.echo_vec_i32(numbers))
+    assert_equal(names, Demo.echo_vec_string(names))
+  end
+
+  def test_collections_check_their_container_and_element_types
+    assert_raises(TypeError) { Demo.echo_vec_i32(nil) }
+    assert_raises(TypeError) { Demo.echo_vec_i32([1, "2"]) }
+    assert_raises(TypeError) { Demo.echo_vec_string(["a", 1]) }
+    assert_raises(TypeError) { Demo.echo_hash_map([]) }
+    assert_raises(TypeError) { Demo.echo_hash_map({ "a" => [1, nil] }) }
+    assert_raises(RangeError) { Demo.echo_vec_u32([1, -1]) }
+  end
+
+  def test_an_argument_that_rust_rejects_raises_instead_of_returning_a_zero_value
+    duplicates = {}.compare_by_identity
+    duplicates["key".dup] = [1]
+    duplicates["key".dup] = [2]
+
+    error = assert_raises(ArgumentError) { Demo.echo_hash_map(duplicates) }
+    assert_match(/rejected an argument.*DuplicateMapKey/, error.message)
+    assert_equal({ "key" => [3] }, Demo.echo_hash_map({ "key" => [3] }))
   end
 
   def test_records_are_frozen_data_values

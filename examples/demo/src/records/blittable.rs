@@ -210,12 +210,7 @@ impl Point {
 #[demo_bench_macros::demo_case(
     "records.blittable.point.should_roundtrip_value",
     justification = "Ensure a blittable Point crosses the wire and returns unchanged.",
-    directions = "Call `records::blittable::echo_point` through the generated binding and assert a blittable Point crosses the wire and returns unchanged.",
-    exclude(
-        ruby,
-        reason = ExclusionReason::ImplementationGap,
-        details = "the Ruby target does not move options or collections yet"
-    )
+    directions = "Call `records::blittable::echo_point` through the generated binding and assert a blittable Point crosses the wire and returns unchanged."
 )]
 #[export]
 pub fn echo_point(p: Point) -> Point {
@@ -225,22 +220,12 @@ pub fn echo_point(p: Point) -> Point {
 #[demo_bench_macros::demo_case(
     "records.blittable.point.should_return_some_for_nonzero_coordinates",
     justification = "Ensure try_make_point returns Some Point when the provided coordinates are not both zero.",
-    directions = "Call `records::blittable::try_make_point` through the generated binding and assert try_make_point returns Some Point when the provided coordinates are not both zero.",
-    exclude(
-        ruby,
-        reason = ExclusionReason::ImplementationGap,
-        details = "the Ruby target does not move options or collections yet"
-    )
+    directions = "Call `records::blittable::try_make_point` through the generated binding and assert try_make_point returns Some Point when the provided coordinates are not both zero."
 )]
 #[demo_bench_macros::demo_case(
     "records.blittable.point.should_return_none_for_origin_coordinates",
     justification = "Ensure try_make_point returns None when both coordinates are zero.",
-    directions = "Call `records::blittable::try_make_point` through the generated binding and assert try_make_point returns None when both coordinates are zero.",
-    exclude(
-        ruby,
-        reason = ExclusionReason::ImplementationGap,
-        details = "the Ruby target does not move options or collections yet"
-    )
+    directions = "Call `records::blittable::try_make_point` through the generated binding and assert try_make_point returns None when both coordinates are zero."
 )]
 #[export]
 pub fn try_make_point(x: f64, y: f64) -> Option<Point> {
@@ -254,12 +239,7 @@ pub fn try_make_point(x: f64, y: f64) -> Option<Point> {
 #[demo_bench_macros::demo_case(
     "records.blittable.point.should_make_from_coordinates",
     justification = "Ensure make_point returns a blittable Point containing the provided coordinates.",
-    directions = "Call `records::blittable::make_point` through the generated binding and assert make_point returns a blittable Point containing the provided coordinates.",
-    exclude(
-        ruby,
-        reason = ExclusionReason::ImplementationGap,
-        details = "the Ruby target does not move options or collections yet"
-    )
+    directions = "Call `records::blittable::make_point` through the generated binding and assert make_point returns a blittable Point containing the provided coordinates."
 )]
 #[export]
 #[benchmark_candidate(function, uniffi)]
@@ -270,12 +250,7 @@ pub fn make_point(x: f64, y: f64) -> Point {
 #[demo_bench_macros::demo_case(
     "records.blittable.point.should_add_values",
     justification = "Ensure add_points returns a blittable Point whose fields are the pairwise coordinate sums.",
-    directions = "Call `records::blittable::add_points` through the generated binding and assert add_points returns a blittable Point whose fields are the pairwise coordinate sums.",
-    exclude(
-        ruby,
-        reason = ExclusionReason::ImplementationGap,
-        details = "the Ruby target does not move options or collections yet"
-    )
+    directions = "Call `records::blittable::add_points` through the generated binding and assert add_points returns a blittable Point whose fields are the pairwise coordinate sums."
 )]
 #[export]
 pub fn add_points(a: Point, b: Point) -> Point {
@@ -493,12 +468,7 @@ impl DataPoint {
 #[demo_bench_macros::demo_case(
     "records.blittable.locations.should_generate_sample_vector",
     justification = "Ensure generate_locations returns the requested number of Location records.",
-    directions = "Call `records::blittable::generate_locations` through the generated binding and assert generate_locations returns the requested number of Location records.",
-    exclude(
-        ruby,
-        reason = ExclusionReason::ImplementationGap,
-        details = "the Ruby target does not move options or collections yet"
-    )
+    directions = "Call `records::blittable::generate_locations` through the generated binding and assert generate_locations returns the requested number of Location records."
 )]
 #[export]
 #[benchmark_candidate(function, uniffi, wasm_bindgen)]
@@ -518,32 +488,17 @@ pub fn generate_locations(count: i32) -> Vec<Location> {
 #[demo_bench_macros::demo_case(
     "records.blittable.locations.should_count_vector_items",
     justification = "Ensure process_locations receives a vector of Location records and returns its item count.",
-    directions = "Call `records::blittable::process_locations` through the generated binding and assert process_locations receives a vector of Location records and returns its item count.",
-    exclude(
-        ruby,
-        reason = ExclusionReason::ImplementationGap,
-        details = "the Ruby target does not move options or collections yet"
-    )
+    directions = "Call `records::blittable::process_locations` through the generated binding and assert process_locations receives a vector of Location records and returns its item count."
 )]
 #[demo_bench_macros::demo_case(
     "records.blittable.locations.should_count_empty_vector",
     justification = "Ensure process_locations treats an empty Location vector as count zero.",
-    directions = "Call `records::blittable::process_locations` through the generated binding and assert process_locations treats an empty Location vector as count zero.",
-    exclude(
-        ruby,
-        reason = ExclusionReason::ImplementationGap,
-        details = "the Ruby target does not move options or collections yet"
-    )
+    directions = "Call `records::blittable::process_locations` through the generated binding and assert process_locations treats an empty Location vector as count zero."
 )]
 #[demo_bench_macros::demo_case(
     "records.blittable.locations.should_count_host_constructed_vector",
     justification = "Ensure process_locations receives host-constructed Location records and returns their item count.",
-    directions = "Call `records::blittable::process_locations` through the generated binding and assert process_locations receives host-constructed Location records and returns their item count.",
-    exclude(
-        ruby,
-        reason = ExclusionReason::ImplementationGap,
-        details = "the Ruby target does not move options or collections yet"
-    )
+    directions = "Call `records::blittable::process_locations` through the generated binding and assert process_locations receives host-constructed Location records and returns their item count."
 )]
 #[export]
 #[benchmark_candidate(function, uniffi, wasm_bindgen)]
@@ -554,22 +509,12 @@ pub fn process_locations(locations: Vec<Location>) -> i32 {
 #[demo_bench_macros::demo_case(
     "records.blittable.locations.should_sum_generated_ratings",
     justification = "Ensure sum_ratings receives generated Location records and sums their f64 rating fields.",
-    directions = "Call `records::blittable::sum_ratings` through the generated binding and assert sum_ratings receives generated Location records and sums their f64 rating fields.",
-    exclude(
-        ruby,
-        reason = ExclusionReason::ImplementationGap,
-        details = "the Ruby target does not move options or collections yet"
-    )
+    directions = "Call `records::blittable::sum_ratings` through the generated binding and assert sum_ratings receives generated Location records and sums their f64 rating fields."
 )]
 #[demo_bench_macros::demo_case(
     "records.blittable.locations.should_sum_host_constructed_ratings",
     justification = "Ensure sum_ratings receives host-constructed Location records and sums their f64 rating fields.",
-    directions = "Call `records::blittable::sum_ratings` through the generated binding and assert sum_ratings receives host-constructed Location records and sums their f64 rating fields.",
-    exclude(
-        ruby,
-        reason = ExclusionReason::ImplementationGap,
-        details = "the Ruby target does not move options or collections yet"
-    )
+    directions = "Call `records::blittable::sum_ratings` through the generated binding and assert sum_ratings receives host-constructed Location records and sums their f64 rating fields."
 )]
 #[export]
 #[benchmark_candidate(function, uniffi, wasm_bindgen)]
@@ -580,12 +525,7 @@ pub fn sum_ratings(locations: Vec<Location>) -> f64 {
 #[demo_bench_macros::demo_case(
     "records.blittable.trades.should_generate_sample_vector",
     justification = "Ensure generate_trades returns the requested number of Trade records.",
-    directions = "Call `records::blittable::generate_trades` through the generated binding and assert generate_trades returns the requested number of Trade records.",
-    exclude(
-        ruby,
-        reason = ExclusionReason::ImplementationGap,
-        details = "the Ruby target does not move options or collections yet"
-    )
+    directions = "Call `records::blittable::generate_trades` through the generated binding and assert generate_trades returns the requested number of Trade records."
 )]
 #[export]
 #[benchmark_candidate(function, uniffi, wasm_bindgen)]
@@ -608,12 +548,7 @@ pub fn generate_trades(count: i32) -> Vec<Trade> {
 #[demo_bench_macros::demo_case(
     "records.blittable.trades.should_sum_volumes",
     justification = "Ensure sum_trade_volumes receives Trade records and sums their i64 volume fields.",
-    directions = "Call `records::blittable::sum_trade_volumes` through the generated binding and assert sum_trade_volumes receives Trade records and sums their i64 volume fields.",
-    exclude(
-        ruby,
-        reason = ExclusionReason::ImplementationGap,
-        details = "the Ruby target does not move options or collections yet"
-    )
+    directions = "Call `records::blittable::sum_trade_volumes` through the generated binding and assert sum_trade_volumes receives Trade records and sums their i64 volume fields."
 )]
 #[export]
 #[benchmark_candidate(function, uniffi, wasm_bindgen)]
@@ -624,12 +559,7 @@ pub fn sum_trade_volumes(trades: Vec<Trade>) -> i64 {
 #[demo_bench_macros::demo_case(
     "records.blittable.trades.should_aggregate_with_locations",
     justification = "Ensure aggregate_location_trade_stats receives Location and Trade vectors together and combines open-location count with total trade volume.",
-    directions = "Call `records::blittable::aggregate_location_trade_stats` through the generated binding and assert aggregate_location_trade_stats receives Location and Trade vectors together and combines open-location count with total trade volume.",
-    exclude(
-        ruby,
-        reason = ExclusionReason::ImplementationGap,
-        details = "the Ruby target does not move options or collections yet"
-    )
+    directions = "Call `records::blittable::aggregate_location_trade_stats` through the generated binding and assert aggregate_location_trade_stats receives Location and Trade vectors together and combines open-location count with total trade volume."
 )]
 #[export]
 #[benchmark_candidate(function, uniffi, wasm_bindgen)]
@@ -642,12 +572,7 @@ pub fn aggregate_location_trade_stats(locations: Vec<Location>, trades: Vec<Trad
 #[demo_bench_macros::demo_case(
     "records.blittable.particles.should_generate_sample_vector",
     justification = "Ensure generate_particles returns the requested number of Particle records.",
-    directions = "Call `records::blittable::generate_particles` through the generated binding and assert generate_particles returns the requested number of Particle records.",
-    exclude(
-        ruby,
-        reason = ExclusionReason::ImplementationGap,
-        details = "the Ruby target does not move options or collections yet"
-    )
+    directions = "Call `records::blittable::generate_particles` through the generated binding and assert generate_particles returns the requested number of Particle records."
 )]
 #[export]
 #[benchmark_candidate(function, uniffi, wasm_bindgen)]
@@ -671,12 +596,7 @@ pub fn generate_particles(count: i32) -> Vec<Particle> {
 #[demo_bench_macros::demo_case(
     "records.blittable.particles.should_sum_masses",
     justification = "Ensure sum_particle_masses receives Particle records and sums their f64 mass fields.",
-    directions = "Call `records::blittable::sum_particle_masses` through the generated binding and assert sum_particle_masses receives Particle records and sums their f64 mass fields.",
-    exclude(
-        ruby,
-        reason = ExclusionReason::ImplementationGap,
-        details = "the Ruby target does not move options or collections yet"
-    )
+    directions = "Call `records::blittable::sum_particle_masses` through the generated binding and assert sum_particle_masses receives Particle records and sums their f64 mass fields."
 )]
 #[export]
 #[benchmark_candidate(function, uniffi, wasm_bindgen)]
@@ -687,12 +607,7 @@ pub fn sum_particle_masses(particles: Vec<Particle>) -> f64 {
 #[demo_bench_macros::demo_case(
     "records.blittable.sensor_readings.should_generate_sample_vector",
     justification = "Ensure generate_sensor_readings returns the requested number of SensorReading records.",
-    directions = "Call `records::blittable::generate_sensor_readings` through the generated binding and assert generate_sensor_readings returns the requested number of SensorReading records.",
-    exclude(
-        ruby,
-        reason = ExclusionReason::ImplementationGap,
-        details = "the Ruby target does not move options or collections yet"
-    )
+    directions = "Call `records::blittable::generate_sensor_readings` through the generated binding and assert generate_sensor_readings returns the requested number of SensorReading records."
 )]
 #[export]
 #[benchmark_candidate(function, uniffi, wasm_bindgen)]
@@ -715,22 +630,12 @@ pub fn generate_sensor_readings(count: i32) -> Vec<SensorReading> {
 #[demo_bench_macros::demo_case(
     "records.blittable.sensor_readings.should_average_generated_temperatures",
     justification = "Ensure avg_sensor_temperature receives SensorReading records and averages their f64 temperature fields.",
-    directions = "Call `records::blittable::avg_sensor_temperature` through the generated binding and assert avg_sensor_temperature receives SensorReading records and averages their f64 temperature fields.",
-    exclude(
-        ruby,
-        reason = ExclusionReason::ImplementationGap,
-        details = "the Ruby target does not move options or collections yet"
-    )
+    directions = "Call `records::blittable::avg_sensor_temperature` through the generated binding and assert avg_sensor_temperature receives SensorReading records and averages their f64 temperature fields."
 )]
 #[demo_bench_macros::demo_case(
     "records.blittable.sensor_readings.should_average_empty_vector_as_zero",
     justification = "Ensure avg_sensor_temperature treats an empty SensorReading vector as average zero.",
-    directions = "Call `records::blittable::avg_sensor_temperature` through the generated binding and assert avg_sensor_temperature treats an empty SensorReading vector as average zero.",
-    exclude(
-        ruby,
-        reason = ExclusionReason::ImplementationGap,
-        details = "the Ruby target does not move options or collections yet"
-    )
+    directions = "Call `records::blittable::avg_sensor_temperature` through the generated binding and assert avg_sensor_temperature treats an empty SensorReading vector as average zero."
 )]
 #[export]
 #[benchmark_candidate(function, uniffi, wasm_bindgen)]
@@ -750,22 +655,12 @@ pub fn avg_sensor_temperature(readings: Vec<SensorReading>) -> f64 {
 #[demo_bench_macros::demo_case(
     "records.blittable.locations.find_location.should_return_some_for_positive_id",
     justification = "Ensure find_location returns Some(Location) for a positive id.",
-    directions = "Call `records::blittable::find_location` through the generated binding and assert find_location returns Some(Location) for a positive id.",
-    exclude(
-        ruby,
-        reason = ExclusionReason::ImplementationGap,
-        details = "the Ruby target does not move options or collections yet"
-    )
+    directions = "Call `records::blittable::find_location` through the generated binding and assert find_location returns Some(Location) for a positive id."
 )]
 #[demo_bench_macros::demo_case(
     "records.blittable.locations.find_location.should_return_none_for_non_positive_id",
     justification = "Ensure find_location returns None for a non-positive id.",
-    directions = "Call `records::blittable::find_location` through the generated binding and assert find_location returns None for a non-positive id.",
-    exclude(
-        ruby,
-        reason = ExclusionReason::ImplementationGap,
-        details = "the Ruby target does not move options or collections yet"
-    )
+    directions = "Call `records::blittable::find_location` through the generated binding and assert find_location returns None for a non-positive id."
 )]
 #[export]
 #[benchmark_candidate(function, uniffi)]
@@ -787,22 +682,12 @@ pub fn find_location(id: i32) -> Option<Location> {
 #[demo_bench_macros::demo_case(
     "records.blittable.locations.find_locations.should_return_some_vector_for_positive_count",
     justification = "Ensure find_locations returns Some generated Location vector for a positive count.",
-    directions = "Call `records::blittable::find_locations` through the generated binding and assert find_locations returns Some generated Location vector for a positive count.",
-    exclude(
-        ruby,
-        reason = ExclusionReason::ImplementationGap,
-        details = "the Ruby target does not move options or collections yet"
-    )
+    directions = "Call `records::blittable::find_locations` through the generated binding and assert find_locations returns Some generated Location vector for a positive count."
 )]
 #[demo_bench_macros::demo_case(
     "records.blittable.locations.find_locations.should_return_none_for_non_positive_count",
     justification = "Ensure find_locations returns None for a non-positive count.",
-    directions = "Call `records::blittable::find_locations` through the generated binding and assert find_locations returns None for a non-positive count.",
-    exclude(
-        ruby,
-        reason = ExclusionReason::ImplementationGap,
-        details = "the Ruby target does not move options or collections yet"
-    )
+    directions = "Call `records::blittable::find_locations` through the generated binding and assert find_locations returns None for a non-positive count."
 )]
 #[export]
 #[benchmark_candidate(function, uniffi)]

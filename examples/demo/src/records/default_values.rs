@@ -293,12 +293,7 @@ impl ServiceConfig {
 #[demo_bench_macros::demo_case(
     "records.default_values.service_config.should_roundtrip_value",
     justification = "Ensure a ServiceConfig record with defaulted and explicit fields crosses the wire and returns unchanged.",
-    directions = "Call `records::default_values::echo_service_config` through the generated binding and assert a ServiceConfig record with defaulted and explicit fields crosses the wire and returns unchanged.",
-    exclude(
-        ruby,
-        reason = ExclusionReason::ImplementationGap,
-        details = "the Ruby target does not move options or collections yet"
-    )
+    directions = "Call `records::default_values::echo_service_config` through the generated binding and assert a ServiceConfig record with defaulted and explicit fields crosses the wire and returns unchanged."
 )]
 #[export]
 pub fn echo_service_config(config: ServiceConfig) -> ServiceConfig {

@@ -67,6 +67,7 @@ struct DirectBody {
 
 struct EncodedBody {
     fields: Vec<EncodedField>,
+    helpers: Vec<String>,
 }
 
 struct DirectField {
@@ -99,7 +100,7 @@ impl Record {
         let symbols = RecordSymbols::for_record(declaration)?;
         let body = match declaration {
             RecordDecl::Direct(record) => Self::direct(record, bridge)?,
-            RecordDecl::Encoded(record) => Self::encoded(record, context)?,
+            RecordDecl::Encoded(record) => Self::encoded(record, &symbols, context)?,
             _ => return unsupported("unknown record declaration"),
         };
         Ok(Self {
@@ -155,22 +156,29 @@ impl Record {
 
     fn encoded(
         record: &EncodedRecordDecl<Native>,
+        symbols: &RecordSymbols,
         context: &RenderContext<Native>,
     ) -> Result<Body> {
         let mut reader = Reader::new(context);
+        let mut helpers = Vec::new();
         let fields = record
             .fields()
             .iter()
             .enumerate()
             .map(|(index, field)| {
                 let read = reader.decode(field.read(), &format!("boltffi_fields[{index}]"))?;
-                let write = Writer::new(context, Expression::new(format!("boltffi_field_{index}")))
-                    .root_path(vec![field.key().clone()])
-                    .encode(field.write())?;
+                let mut writer = Writer::new(
+                    context,
+                    Expression::new(format!("boltffi_field_{index}")),
+                    format!("{}_field{index}", symbols.writer()),
+                )
+                .root_path(vec![field.key().clone()]);
+                let write = writer.encode(field.write())?;
+                helpers.extend(writer.into_helpers());
                 Ok(EncodedField { read, write })
             })
             .collect::<Result<Vec<_>>>()?;
-        Ok(Body::Encoded(EncodedBody { fields }))
+        Ok(Body::Encoded(EncodedBody { fields, helpers }))
     }
 
     /// Size of the C array that holds member values; C arrays cannot be empty.

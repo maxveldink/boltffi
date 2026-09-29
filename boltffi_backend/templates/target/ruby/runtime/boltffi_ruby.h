@@ -14,7 +14,10 @@
  *    without a second check.
  * 5. Run no Ruby code while an argument is encoded. Each check reads the type
  *    and never calls a conversion method such as `to_str`, and no conversion
- *    prints a warning, because a warning hook is Ruby code.
+ *    prints a warning, because a warning hook is Ruby code. Ruby code could
+ *    change a Hash or an Array after its size is written. As a second line of
+ *    defense, each tuple read checks the type again, and a Hash whose size
+ *    changes during encoding raises before Rust runs.
  */
 #ifndef BOLTFFI_RUBY_H
 #define BOLTFFI_RUBY_H
@@ -173,6 +176,39 @@ static inline VALUE boltffi_ruby_utf8(VALUE value) {
     return value;
 }
 
+static inline VALUE boltffi_ruby_expect_array(VALUE value) {
+    if (!RB_TYPE_P(value, T_ARRAY)) {
+        boltffi_ruby_wrong_type(value, "Array");
+    }
+    return value;
+}
+
+static inline VALUE boltffi_ruby_expect_hash(VALUE value) {
+    if (!RB_TYPE_P(value, T_HASH)) {
+        boltffi_ruby_wrong_type(value, "Hash");
+    }
+    return value;
+}
+
+static inline void boltffi_ruby_expect_tuple(VALUE value, long size) {
+    boltffi_ruby_expect_array(value);
+    if (RARRAY_LEN(value) != size) {
+        rb_raise(rb_eArgError, "expected an Array of %ld elements, got %ld", size, RARRAY_LEN(value));
+    }
+}
+
+/* Reads one tuple element. `rb_ary_entry` needs an Array, so the type is checked on every read. */
+static inline VALUE boltffi_ruby_tuple_entry(VALUE tuple, long index) {
+    return rb_ary_entry(boltffi_ruby_expect_array(tuple), index);
+}
+
+/* The count of a Hash is written before its pairs, so a Hash that changed meanwhile raises. */
+static inline void boltffi_ruby_expect_hash_size(VALUE hash, long size) {
+    if ((long)RHASH_SIZE(hash) != size) {
+        rb_raise(rb_eRuntimeError, "BoltFFI: a Hash changed while it was encoded");
+    }
+}
+
 static inline void boltffi_ruby_expect_record(VALUE value, VALUE record_class) {
     if (!RTEST(rb_obj_is_kind_of(value, record_class))) {
         rb_raise(rb_eTypeError, "wrong argument type %" PRIsVALUE " (expected %" PRIsVALUE ")", rb_obj_class(value), record_class);
@@ -254,6 +290,43 @@ static inline VALUE boltffi_ruby_read_usize(boltffi_ruby_reader *reader) { retur
 static inline VALUE boltffi_ruby_read_f32(boltffi_ruby_reader *reader) { return boltffi_ruby_from_f32(boltffi_ruby_read_raw_f32(reader)); }
 static inline VALUE boltffi_ruby_read_f64(boltffi_ruby_reader *reader) { return boltffi_ruby_from_f64(boltffi_ruby_read_raw_f64(reader)); }
 
+/*
+ * A direct vector holds `isize` and `usize` at native width. The wire format
+ * always spends 8 bytes on them, so the wire readers above do not apply.
+ */
+static inline VALUE boltffi_ruby_read_native_isize(boltffi_ruby_reader *reader) {
+    intptr_t value;
+    memcpy(&value, boltffi_ruby_read_bytes(reader, sizeof(value)), sizeof(value));
+    return boltffi_ruby_from_isize(value);
+}
+
+static inline VALUE boltffi_ruby_read_native_usize(boltffi_ruby_reader *reader) {
+    uintptr_t value;
+    memcpy(&value, boltffi_ruby_read_bytes(reader, sizeof(value)), sizeof(value));
+    return boltffi_ruby_from_usize(value);
+}
+
+static inline bool boltffi_ruby_read_option_tag(boltffi_ruby_reader *reader) {
+    uint8_t tag = boltffi_ruby_read_raw_u8(reader);
+    if (tag > 1) {
+        boltffi_ruby_malformed();
+    }
+    return tag == 1;
+}
+
+/*
+ * Reads an element count. Each element takes at least `minimum_size` bytes,
+ * so a count that cannot fit in the rest of the buffer is rejected before
+ * Ruby allocates an Array for it.
+ */
+static inline long boltffi_ruby_read_count(boltffi_ruby_reader *reader, uintptr_t minimum_size) {
+    uint32_t count = boltffi_ruby_read_raw_u32(reader);
+    if (minimum_size != 0 && count > (reader->len - reader->offset) / minimum_size) {
+        boltffi_ruby_malformed();
+    }
+    return (long)count;
+}
+
 static inline VALUE boltffi_ruby_read_string(boltffi_ruby_reader *reader) {
     uint32_t len = boltffi_ruby_read_raw_u32(reader);
     const uint8_t *bytes = boltffi_ruby_read_bytes(reader, len);
@@ -264,6 +337,14 @@ static inline VALUE boltffi_ruby_read_binary(boltffi_ruby_reader *reader) {
     uint32_t len = boltffi_ruby_read_raw_u32(reader);
     const uint8_t *bytes = boltffi_ruby_read_bytes(reader, len);
     return rb_str_new((const char *)bytes, (long)len);
+}
+
+/* A direct vector returns raw elements, so its length must be whole elements. */
+static inline long boltffi_ruby_raw_count(boltffi_ruby_reader *reader, uintptr_t element_size) {
+    if (reader->len % element_size != 0 || reader->len / element_size > (uintptr_t)LONG_MAX) {
+        boltffi_ruby_malformed();
+    }
+    return (long)(reader->len / element_size);
 }
 
 typedef VALUE boltffi_ruby_decode_fn(boltffi_ruby_reader *reader);

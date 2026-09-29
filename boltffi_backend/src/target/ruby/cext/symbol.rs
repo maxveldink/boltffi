@@ -102,6 +102,17 @@ impl PrimitiveSymbols {
         self.helper("read")
     }
 
+    /// Reads one element of a direct vector into a Ruby value.
+    ///
+    /// A direct vector holds `isize` and `usize` at native width, but the
+    /// encoded readers always take 8 bytes for them.
+    pub fn element_reader(&self) -> Result<Identifier> {
+        match self.primitive {
+            Primitive::ISize | Primitive::USize => self.helper("read_native"),
+            _ => self.reader(),
+        }
+    }
+
     /// Checks one Ruby value and appends its encoded bytes.
     pub fn writer(&self) -> Result<Identifier> {
         self.helper("write")
@@ -110,6 +121,11 @@ impl PrimitiveSymbols {
     /// The C ABI type of the primitive.
     pub fn c_type(&self) -> Result<TypeFragment> {
         TypeFragment::anonymous(&Type::primitive(self.primitive)?)
+    }
+
+    /// The number of bytes the primitive takes in an encoded buffer.
+    pub fn wire_size(&self) -> usize {
+        self.primitive.wire_size().get() as usize
     }
 
     fn helper(&self, role: &str) -> Result<Identifier> {

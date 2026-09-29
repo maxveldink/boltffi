@@ -9,22 +9,12 @@ use crate::results::ApiResult;
 #[demo_bench_macros::demo_case(
     "options.complex.string.should_roundtrip_some",
     justification = "Ensure an Option<String> carrying Some crosses the wire as UTF-8 and returns unchanged.",
-    directions = "Call `options::complex::echo_optional_string` through the generated binding and assert an Option<String> carrying Some crosses the wire as UTF-8 and returns unchanged.",
-    exclude(
-        ruby,
-        reason = ExclusionReason::ImplementationGap,
-        details = "the Ruby target does not move options or collections yet"
-    )
+    directions = "Call `options::complex::echo_optional_string` through the generated binding and assert an Option<String> carrying Some crosses the wire as UTF-8 and returns unchanged."
 )]
 #[demo_bench_macros::demo_case(
     "options.complex.string.should_roundtrip_none",
     justification = "Ensure an Option<String> carrying None crosses the wire and returns None.",
-    directions = "Call `options::complex::echo_optional_string` through the generated binding and assert an Option<String> carrying None crosses the wire and returns None.",
-    exclude(
-        ruby,
-        reason = ExclusionReason::ImplementationGap,
-        details = "the Ruby target does not move options or collections yet"
-    )
+    directions = "Call `options::complex::echo_optional_string` through the generated binding and assert an Option<String> carrying None crosses the wire and returns None."
 )]
 #[export]
 pub fn echo_optional_string(v: Option<String>) -> Option<String> {
@@ -34,22 +24,12 @@ pub fn echo_optional_string(v: Option<String>) -> Option<String> {
 #[demo_bench_macros::demo_case(
     "options.complex.string.should_report_some",
     justification = "Ensure is_some_string returns true when an Option<String> is Some.",
-    directions = "Call `options::complex::is_some_string` through the generated binding and assert is_some_string returns true when an Option<String> is Some.",
-    exclude(
-        ruby,
-        reason = ExclusionReason::ImplementationGap,
-        details = "the Ruby target does not move options or collections yet"
-    )
+    directions = "Call `options::complex::is_some_string` through the generated binding and assert is_some_string returns true when an Option<String> is Some."
 )]
 #[demo_bench_macros::demo_case(
     "options.complex.string.should_report_none",
     justification = "Ensure is_some_string returns false when an Option<String> is None.",
-    directions = "Call `options::complex::is_some_string` through the generated binding and assert is_some_string returns false when an Option<String> is None.",
-    exclude(
-        ruby,
-        reason = ExclusionReason::ImplementationGap,
-        details = "the Ruby target does not move options or collections yet"
-    )
+    directions = "Call `options::complex::is_some_string` through the generated binding and assert is_some_string returns false when an Option<String> is None."
 )]
 #[export]
 pub fn is_some_string(v: Option<String>) -> bool {
@@ -59,22 +39,12 @@ pub fn is_some_string(v: Option<String>) -> bool {
 #[demo_bench_macros::demo_case(
     "options.complex.point.should_roundtrip_some",
     justification = "Ensure an Option<Point> carrying Some crosses the wire and returns the same Point.",
-    directions = "Call `options::complex::echo_optional_point` through the generated binding and assert an Option<Point> carrying Some crosses the wire and returns the same Point.",
-    exclude(
-        ruby,
-        reason = ExclusionReason::ImplementationGap,
-        details = "the Ruby target does not move options or collections yet"
-    )
+    directions = "Call `options::complex::echo_optional_point` through the generated binding and assert an Option<Point> carrying Some crosses the wire and returns the same Point."
 )]
 #[demo_bench_macros::demo_case(
     "options.complex.point.should_roundtrip_none",
     justification = "Ensure an Option<Point> carrying None crosses the wire and returns None.",
-    directions = "Call `options::complex::echo_optional_point` through the generated binding and assert an Option<Point> carrying None crosses the wire and returns None.",
-    exclude(
-        ruby,
-        reason = ExclusionReason::ImplementationGap,
-        details = "the Ruby target does not move options or collections yet"
-    )
+    directions = "Call `options::complex::echo_optional_point` through the generated binding and assert an Option<Point> carrying None crosses the wire and returns None."
 )]
 #[export]
 pub fn echo_optional_point(v: Option<Point>) -> Option<Point> {
@@ -85,12 +55,7 @@ pub fn echo_optional_point(v: Option<Point>) -> Option<Point> {
 #[demo_bench_macros::demo_case(
     "options.complex.point.should_make_some",
     justification = "Ensure make_some_point returns Some containing a Point built from coordinates.",
-    directions = "Call `options::complex::make_some_point` through the generated binding and assert make_some_point returns Some containing a Point built from coordinates.",
-    exclude(
-        ruby,
-        reason = ExclusionReason::ImplementationGap,
-        details = "the Ruby target does not move options or collections yet"
-    )
+    directions = "Call `options::complex::make_some_point` through the generated binding and assert make_some_point returns Some containing a Point built from coordinates."
 )]
 #[export]
 pub fn make_some_point(x: f64, y: f64) -> Option<Point> {
@@ -100,12 +65,7 @@ pub fn make_some_point(x: f64, y: f64) -> Option<Point> {
 #[demo_bench_macros::demo_case(
     "options.complex.point.should_make_none",
     justification = "Ensure make_none_point returns None for Option<Point>.",
-    directions = "Call `options::complex::make_none_point` through the generated binding and assert make_none_point returns None for Option<Point>.",
-    exclude(
-        ruby,
-        reason = ExclusionReason::ImplementationGap,
-        details = "the Ruby target does not move options or collections yet"
-    )
+    directions = "Call `options::complex::make_none_point` through the generated binding and assert make_none_point returns None for Option<Point>."
 )]
 #[export]
 pub fn make_none_point() -> Option<Point> {
@@ -140,32 +100,17 @@ pub fn echo_optional_status(v: Option<Status>) -> Option<Status> {
 #[demo_bench_macros::demo_case(
     "options.complex.vec.should_roundtrip_some",
     justification = "Ensure an Option<Vec<i32>> carrying Some crosses the wire and returns the same vector.",
-    directions = "Call `options::complex::echo_optional_vec` through the generated binding and assert an Option<Vec<i32>> carrying Some crosses the wire and returns the same vector.",
-    exclude(
-        ruby,
-        reason = ExclusionReason::ImplementationGap,
-        details = "the Ruby target does not move options or collections yet"
-    )
+    directions = "Call `options::complex::echo_optional_vec` through the generated binding and assert an Option<Vec<i32>> carrying Some crosses the wire and returns the same vector."
 )]
 #[demo_bench_macros::demo_case(
     "options.complex.vec.should_roundtrip_none",
     justification = "Ensure an Option<Vec<i32>> carrying None crosses the wire and returns None.",
-    directions = "Call `options::complex::echo_optional_vec` through the generated binding and assert an Option<Vec<i32>> carrying None crosses the wire and returns None.",
-    exclude(
-        ruby,
-        reason = ExclusionReason::ImplementationGap,
-        details = "the Ruby target does not move options or collections yet"
-    )
+    directions = "Call `options::complex::echo_optional_vec` through the generated binding and assert an Option<Vec<i32>> carrying None crosses the wire and returns None."
 )]
 #[demo_bench_macros::demo_case(
     "options.complex.vec.should_roundtrip_empty_some",
     justification = "Ensure an Option<Vec<i32>> carrying Some(empty vector) remains distinct from None.",
-    directions = "Call `options::complex::echo_optional_vec` through the generated binding and assert an Option<Vec<i32>> carrying Some(empty vector) remains distinct from None.",
-    exclude(
-        ruby,
-        reason = ExclusionReason::ImplementationGap,
-        details = "the Ruby target does not move options or collections yet"
-    )
+    directions = "Call `options::complex::echo_optional_vec` through the generated binding and assert an Option<Vec<i32>> carrying Some(empty vector) remains distinct from None."
 )]
 #[export]
 pub fn echo_optional_vec(v: Option<Vec<i32>>) -> Option<Vec<i32>> {
@@ -175,22 +120,12 @@ pub fn echo_optional_vec(v: Option<Vec<i32>>) -> Option<Vec<i32>> {
 #[demo_bench_macros::demo_case(
     "options.complex.vec.should_report_length_for_some",
     justification = "Ensure optional_vec_length returns Some(length) when an Option<Vec<i32>> contains a vector.",
-    directions = "Call `options::complex::optional_vec_length` through the generated binding and assert optional_vec_length returns Some(length) when an Option<Vec<i32>> contains a vector.",
-    exclude(
-        ruby,
-        reason = ExclusionReason::ImplementationGap,
-        details = "the Ruby target does not move options or collections yet"
-    )
+    directions = "Call `options::complex::optional_vec_length` through the generated binding and assert optional_vec_length returns Some(length) when an Option<Vec<i32>> contains a vector."
 )]
 #[demo_bench_macros::demo_case(
     "options.complex.vec.should_return_none_for_absent_length",
     justification = "Ensure optional_vec_length returns None when the vector option is absent.",
-    directions = "Call `options::complex::optional_vec_length` through the generated binding and assert optional_vec_length returns None when the vector option is absent.",
-    exclude(
-        ruby,
-        reason = ExclusionReason::ImplementationGap,
-        details = "the Ruby target does not move options or collections yet"
-    )
+    directions = "Call `options::complex::optional_vec_length` through the generated binding and assert optional_vec_length returns None when the vector option is absent."
 )]
 #[export]
 pub fn optional_vec_length(v: Option<Vec<i32>>) -> Option<u32> {
@@ -201,22 +136,12 @@ pub fn optional_vec_length(v: Option<Vec<i32>>) -> Option<u32> {
 #[demo_bench_macros::demo_case(
     "options.complex.string.should_find_name_for_positive_id",
     justification = "Ensure find_name returns Some generated string when the id is positive.",
-    directions = "Call `options::complex::find_name` through the generated binding and assert find_name returns Some generated string when the id is positive.",
-    exclude(
-        ruby,
-        reason = ExclusionReason::ImplementationGap,
-        details = "the Ruby target does not move options or collections yet"
-    )
+    directions = "Call `options::complex::find_name` through the generated binding and assert find_name returns Some generated string when the id is positive."
 )]
 #[demo_bench_macros::demo_case(
     "options.complex.string.should_return_none_for_non_positive_id",
     justification = "Ensure find_name returns None when the id is not positive.",
-    directions = "Call `options::complex::find_name` through the generated binding and assert find_name returns None when the id is not positive.",
-    exclude(
-        ruby,
-        reason = ExclusionReason::ImplementationGap,
-        details = "the Ruby target does not move options or collections yet"
-    )
+    directions = "Call `options::complex::find_name` through the generated binding and assert find_name returns None when the id is not positive."
 )]
 #[export]
 pub fn find_name(id: i32) -> Option<String> {
@@ -231,22 +156,12 @@ pub fn find_name(id: i32) -> Option<String> {
 #[demo_bench_macros::demo_case(
     "options.complex.vec.should_find_numbers_for_positive_count",
     justification = "Ensure find_numbers returns Some vector of i32 values when count is positive.",
-    directions = "Call `options::complex::find_numbers` through the generated binding and assert find_numbers returns Some vector of i32 values when count is positive.",
-    exclude(
-        ruby,
-        reason = ExclusionReason::ImplementationGap,
-        details = "the Ruby target does not move options or collections yet"
-    )
+    directions = "Call `options::complex::find_numbers` through the generated binding and assert find_numbers returns Some vector of i32 values when count is positive."
 )]
 #[demo_bench_macros::demo_case(
     "options.complex.vec.should_return_none_for_non_positive_number_count",
     justification = "Ensure find_numbers returns None when count is not positive.",
-    directions = "Call `options::complex::find_numbers` through the generated binding and assert find_numbers returns None when count is not positive.",
-    exclude(
-        ruby,
-        reason = ExclusionReason::ImplementationGap,
-        details = "the Ruby target does not move options or collections yet"
-    )
+    directions = "Call `options::complex::find_numbers` through the generated binding and assert find_numbers returns None when count is not positive."
 )]
 #[export]
 pub fn find_numbers(count: i32) -> Option<Vec<i32>> {
@@ -261,22 +176,12 @@ pub fn find_numbers(count: i32) -> Option<Vec<i32>> {
 #[demo_bench_macros::demo_case(
     "options.complex.vec_string.should_find_names_for_positive_count",
     justification = "Ensure find_names returns Some vector of generated strings when count is positive.",
-    directions = "Call `options::complex::find_names` through the generated binding and assert find_names returns Some vector of generated strings when count is positive.",
-    exclude(
-        ruby,
-        reason = ExclusionReason::ImplementationGap,
-        details = "the Ruby target does not move options or collections yet"
-    )
+    directions = "Call `options::complex::find_names` through the generated binding and assert find_names returns Some vector of generated strings when count is positive."
 )]
 #[demo_bench_macros::demo_case(
     "options.complex.vec_string.should_return_none_for_non_positive_name_count",
     justification = "Ensure find_names returns None when count is not positive.",
-    directions = "Call `options::complex::find_names` through the generated binding and assert find_names returns None when count is not positive.",
-    exclude(
-        ruby,
-        reason = ExclusionReason::ImplementationGap,
-        details = "the Ruby target does not move options or collections yet"
-    )
+    directions = "Call `options::complex::find_names` through the generated binding and assert find_names returns None when count is not positive."
 )]
 #[export]
 pub fn find_names(count: i32) -> Option<Vec<String>> {
@@ -348,32 +253,17 @@ pub fn find_api_result(code: i32) -> Option<ApiResult> {
 #[demo_bench_macros::demo_case(
     "options.complex.vec_optional_i32.should_roundtrip_mixed_presence",
     justification = "Ensure a Vec<Option<i32>> carrying mixed Some and None elements crosses the wire and returns unchanged.",
-    directions = "Call `options::complex::echo_vec_optional_i32` through the generated binding and assert a Vec<Option<i32>> carrying mixed Some and None elements crosses the wire and returns unchanged.",
-    exclude(
-        ruby,
-        reason = ExclusionReason::ImplementationGap,
-        details = "the Ruby target does not move options or collections yet"
-    )
+    directions = "Call `options::complex::echo_vec_optional_i32` through the generated binding and assert a Vec<Option<i32>> carrying mixed Some and None elements crosses the wire and returns unchanged."
 )]
 #[demo_bench_macros::demo_case(
     "options.complex.vec_optional_i32.should_roundtrip_empty",
     justification = "Ensure an empty Vec<Option<i32>> crosses the wire and returns empty.",
-    directions = "Call `options::complex::echo_vec_optional_i32` through the generated binding and assert an empty Vec<Option<i32>> crosses the wire and returns empty.",
-    exclude(
-        ruby,
-        reason = ExclusionReason::ImplementationGap,
-        details = "the Ruby target does not move options or collections yet"
-    )
+    directions = "Call `options::complex::echo_vec_optional_i32` through the generated binding and assert an empty Vec<Option<i32>> crosses the wire and returns empty."
 )]
 #[demo_bench_macros::demo_case(
     "options.complex.vec_optional_i32.should_roundtrip_all_none",
     justification = "Ensure a Vec<Option<i32>> carrying only None elements crosses the wire and preserves each absent slot.",
-    directions = "Call `options::complex::echo_vec_optional_i32` through the generated binding and assert a Vec<Option<i32>> carrying only None elements crosses the wire and preserves each absent slot.",
-    exclude(
-        ruby,
-        reason = ExclusionReason::ImplementationGap,
-        details = "the Ruby target does not move options or collections yet"
-    )
+    directions = "Call `options::complex::echo_vec_optional_i32` through the generated binding and assert a Vec<Option<i32>> carrying only None elements crosses the wire and preserves each absent slot."
 )]
 #[export]
 pub fn echo_vec_optional_i32(v: Vec<Option<i32>>) -> Vec<Option<i32>> {

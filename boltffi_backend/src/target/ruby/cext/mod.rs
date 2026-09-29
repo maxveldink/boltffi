@@ -2,13 +2,13 @@
 //!
 //! The Ruby target renders a C extension that links the Rust static library
 //! and calls the shared C ABI (`CBridge`) directly. Every value crosses as a
-//! plain Ruby object: `Integer`, `Float`, `true`/`false`, `String`, and one
-//! frozen `Data` class per record. The extension builds those objects eagerly,
-//! so Ruby code, and YJIT, see ordinary Ruby values.
+//! plain Ruby object: `Integer`, `Float`, `true`/`false`, `String`, `Array`,
+//! `Hash`, `nil`, and one frozen `Data` class per record. The extension builds
+//! those objects eagerly, so Ruby code, and YJIT, see ordinary Ruby values.
 //!
-//! The target renders synchronous free functions and records. Options,
-//! collections, enums, classes, callbacks, streams, async functions,
-//! constants, custom types, and fallible functions are not supported yet.
+//! The target renders synchronous free functions and records. Enums, classes,
+//! callbacks, streams, async functions, constants, custom types, and fallible
+//! functions are not supported yet.
 
 mod codec;
 mod render;
@@ -396,6 +396,45 @@ mod tests {
     }
 
     #[test]
+    fn ruby_target_renders_options_and_collections() {
+        let output = render(
+            RubyCExtHost::new(),
+            r#"
+            use std::collections::HashMap;
+
+            #[data]
+            pub struct Point { pub x: f64, pub y: f64 }
+
+            #[data]
+            pub struct Shape { pub name: String, pub points: Vec<Point>, pub center: Option<Point>, pub labels: HashMap<String, String> }
+
+            #[export]
+            pub fn total(values: Vec<u64>) -> u64 { values.iter().sum() }
+
+            #[export]
+            pub fn tags(names: Vec<String>) -> HashMap<String, Vec<i32>> { HashMap::new() }
+
+            #[export]
+            pub fn half(value: Option<i32>) -> Option<f64> { value.map(|value| value as f64 / 2.0) }
+
+            #[export]
+            pub fn swap(pair: (i32, String)) -> (String, i32) { (pair.1, pair.0) }
+
+            #[export]
+            pub fn points(count: u32) -> Vec<Point> { Vec::new() }
+
+            #[export]
+            pub fn echo_shape(shape: Shape) -> Shape { shape }
+            "#,
+        );
+
+        insta::assert_snapshot!(
+            "ruby_options_and_collections",
+            file(&output, "ext/demo/demo.c")
+        );
+    }
+
+    #[test]
     fn ruby_package_files_use_the_configured_gem_module_and_manifest() {
         let host = RubyCExtHost::new()
             .gem_name("my-lib")
@@ -450,6 +489,12 @@ mod tests {
 
             #[export]
             pub fn ok() -> bool { true }
+
+            #[export]
+            pub fn flatten(value: Option<Option<i32>>) -> Option<i32> { value.flatten() }
+
+            #[export]
+            pub fn keep(values: Option<Vec<Option<i32>>>) -> Option<Vec<Option<i32>>> { values }
         "#;
         let bindings = bindings(source);
         let output = RubyCExtHost::new()
@@ -470,10 +515,14 @@ mod tests {
                 "mode: enums are not implemented in the Ruby host",
                 "current::mode: enum return",
                 "parse: fallible function",
+                "flatten: nested optional",
             ]
         );
         let extension = file(&output, "ext/demo/demo.c");
         assert!(extension.contains("\"ok\""));
+        // An optional inside a vector inside an optional keeps `None` and
+        // `Some(None)` apart, so it is supported.
+        assert!(extension.contains("\"keep\""));
         assert!(!extension.contains("\"parse\""));
         assert!(!extension.contains("\"current_mode\""));
     }

@@ -25,11 +25,6 @@ use boltffi::*;
         python,
         reason = ExclusionReason::CoverageGap,
         details = "The Python demo suite does not assert HashMap returns yet. Add the marker when Python map coverage lands."
-    ),
-    exclude(
-        ruby,
-        reason = ExclusionReason::ImplementationGap,
-        details = "the Ruby target does not move options or collections yet"
     )
 )]
 #[export]
@@ -62,11 +57,6 @@ pub fn make_hash_map() -> HashMap<String, i32> {
         python,
         reason = ExclusionReason::CoverageGap,
         details = "The Python demo suite does not assert HashMap parameters yet. Add the marker when Python map coverage lands."
-    ),
-    exclude(
-        ruby,
-        reason = ExclusionReason::ImplementationGap,
-        details = "the Ruby target does not move options or collections yet"
     )
 )]
 #[demo_bench_macros::demo_case(
@@ -92,11 +82,6 @@ pub fn make_hash_map() -> HashMap<String, i32> {
         python,
         reason = ExclusionReason::CoverageGap,
         details = "The Python demo suite does not assert nested HashMap values yet. Add the marker when Python map coverage lands."
-    ),
-    exclude(
-        ruby,
-        reason = ExclusionReason::ImplementationGap,
-        details = "the Ruby target does not move options or collections yet"
     )
 )]
 #[export]
