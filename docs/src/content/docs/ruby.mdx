@@ -1,0 +1,90 @@
+---
+title: "Ruby"
+description: "Call a Rust library from Ruby through a generated C extension, with plain Ruby values at the boundary."
+---
+
+# Ruby
+
+The Ruby target generates a C extension gem. The extension links the Rust static library and calls it directly, so a Rust function is an ordinary Ruby module function. Build the gem with [Packaging](/docs/packaging#ruby-experimental) and choose its names in [Configuration](/docs/configuration#ruby-configuration).
+
+Ruby is experimental. It supports synchronous free functions and records; the remaining gaps are listed under [Experimental features](/docs/experimental#ruby).
+
+## Call a Rust function
+
+With the `distance` function from Getting Started and a package named `mylib`:
+
+```ruby
+require "mylib"
+
+start = Mylib::Point.new(x: 0.0, y: 0.0)
+finish = Mylib::Point.new(x: 3.0, y: 4.0)
+Mylib.distance(start, finish) # => 5.0
+```
+
+Each function is a module function. A function with up to 15 parameters has a fixed arity, so Ruby and YJIT call the C function directly. Ruby allows no wider fixed arity, so a function with more parameters takes a variable argument list and checks the count itself.
+
+## Type mapping
+
+Every value becomes a plain Ruby object when it crosses the boundary. The extension builds each object in full before the call returns; nothing refers back to Rust memory.
+
+| Rust | Ruby |
+|------|------|
+| `bool` | `true` or `false` |
+| `i8` to `i64`, `u8` to `u64`, `isize`, `usize` | `Integer` |
+| `f32`, `f64` | `Float` |
+| `String`, `&str` | `String` in UTF-8 |
+| `Vec<u8>` | `String` in ASCII-8BIT |
+| `Vec<T>`, tuples | `Array` |
+| `HashMap<K, V>`, `BTreeMap<K, V>` | `Hash` |
+| `Option<T>` | `nil` or the value |
+| `#[data]` struct | frozen `Data` instance |
+| `()` | `nil` |
+
+Arguments are checked before Rust runs:
+
+- An integer argument must be an `Integer` in the range of the Rust type. `1.5` raises `TypeError` and `-1` for a `u32` raises `RangeError`.
+- A float argument accepts `Float` and `Integer`. An `Integer` too large for a `Float` raises `RangeError`.
+- A `bool` argument accepts only `true` and `false`.
+- A string argument must be a `String` with valid UTF-8. An ASCII-only string in another ASCII-compatible encoding passes. Other strings raise `ArgumentError` or `Encoding::CompatibilityError`; transcode them with `String#encode` first.
+- An array, hash, or record argument must be an `Array`, a `Hash`, or an instance of its `Data` class.
+
+The checks read each value's type and never call a conversion method such as `to_str`, `to_ary`, or `to_hash`, so no Ruby code runs while the extension encodes an argument. If Rust still rejects an encoded argument, the call raises `ArgumentError` with Rust's message. For example, a `Hash` that compares by identity can hold two equal keys, which a Rust map rejects.
+
+## Records
+
+Each `#[data]` struct becomes a `Data` class under the module, with one member per field:
+
+```ruby
+point = Mylib::Point.new(x: 1.0, y: 2.0)
+point.x        # => 1.0
+point.frozen?  # => true
+point.to_h     # => {x: 1.0, y: 2.0}
+```
+
+A field whose name is also a method of every Ruby object, such as `hash` or `class`, gets a trailing underscore: `record.hash_`. A function whose name is also a method of every Ruby module, such as `name`, gets one too: `Mylib.name_`.
+
+## Panics
+
+A panic in a synchronous function aborts the Ruby process, as it does for every BoltFFI target. BoltFFI exports are `extern "C"` functions, and a panic cannot unwind out of one. Other targets catch panics only in async functions, which the Ruby target does not support yet.
+
+To keep the process alive, catch the panic inside the function and return an `Option`. Ruby then receives `nil`:
+
+```rust
+#[export]
+pub fn checked_divide(dividend: i32, divisor: i32) -> Option<i32> {
+    // The division panics when the divisor is 0.
+    std::panic::catch_unwind(|| dividend / divisor).ok()
+}
+```
+
+```ruby
+Mylib.checked_divide(6, 3) # => 2
+Mylib.checked_divide(1, 0) # => nil
+```
+
+The pattern needs `panic = "unwind"`, which is the Cargo default. Use it only for a function whose result is not already an `Option`, because `nil` then means that the function failed. If the closure captures a value that is not unwind-safe, wrap it in `std::panic::AssertUnwindSafe`. The panic message still goes to standard error.
+
+## Runtime behavior
+
+- Calls hold the global VM lock. A long Rust computation blocks other Ruby threads for its duration.
+- The compiled extension is specific to the Ruby version it was built for. A precompiled gem needs one build per Ruby minor version.

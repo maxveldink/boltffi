@@ -906,6 +906,76 @@ boltffi generate c --experimental --deny-skipped
 
 This writes `dist/c/boltffi.h` without packaging native libraries. `pack c` copies the public header to `dist/c/include/mylib.h` and builds the matching libraries.
 
+## Ruby (experimental)
+
+Enable the [Ruby target](/docs/configuration#ruby-configuration), then write the gem sources and the host static library:
+
+```bash
+boltffi pack ruby --experimental --release --deny-skipped
+```
+
+The Rust library must declare the `staticlib` crate type:
+
+```toml
+[lib]
+crate-type = ["staticlib", "rlib"]
+```
+
+`pack ruby` generates the sources with the same cargo arguments that build the static library: `[cargo] global_args`, `[cargo.command_args].build`, and `--cargo-arg`. `[cargo.command_args].generate` does not apply. For the same reason, `pack ruby` rejects `--regenerate false` unless `--no-build` is also set.
+
+The link metadata beside the library records a digest of the extension source. If the source changes after the pack, for example through a later `boltffi generate ruby`, `extconf.rb` stops with an error. Run `boltffi pack ruby` again. Otherwise the library could lack a function that the new source calls, and Ruby would crash at the first call.
+
+### Output structure
+
+With the package named `mylib` and output directory `dist/ruby`, the gem sources are:
+
+```text
+dist/ruby/
+├── mylib.gemspec
+├── lib/mylib.rb
+└── ext/mylib/
+    ├── extconf.rb
+    ├── mylib.c
+    ├── boltffi.h
+    ├── boltffi_ruby.h
+    ├── libmylib.a
+    └── libmylib.a.boltffi-link.json
+```
+
+Build and install the gem with RubyGems. The install compiles the extension and links `libmylib.a`, so it does not need cargo:
+
+```bash
+cd dist/ruby
+gem build mylib.gemspec
+gem install --local mylib-*.gem
+```
+
+The static library matches the machine that ran `pack ruby`. So the gemspec tags the gem with that platform, such as `arm64-darwin` or `x86_64-linux`, and RubyGems refuses to install it anywhere else. `pack ruby` runs on macOS and Linux hosts. The install compiles the extension for the Ruby that installs the gem, so one gem serves every Ruby that the gem supports, 3.3 and later.
+
+### Building from source
+
+`extconf.rb` takes the static library from the first of these sources:
+
+1. The path in `BOLTFFI_RUBY_STATIC_LIBRARY`. Its link metadata, such as `libmylib.a.boltffi-link.json`, must be beside it. `pack ruby` writes both files, so copy them together.
+2. `lib<library>.a` beside `extconf.rb`, where `pack ruby` puts it.
+3. A cargo build of the crate at `BOLTFFI_RUBY_CARGO_MANIFEST` or at [`cargo_manifest`](/docs/configuration#ruby-configuration). The build uses the same binding expansion as `pack ruby` and replays the cargo feature arguments that `boltffi generate` used.
+
+A `.gem` file holds the generated files but not the crate. So `cargo_manifest` works only when `extconf.rb` runs in a checkout that holds the crate: `ruby extconf.rb` in the source tree, or a Bundler `git:` gem. The repository must contain the generated gem sources, and `glob:` points Bundler at the gemspec:
+
+```ruby
+gem "mylib", git: "https://github.com/example/mylib", glob: "dist/ruby/*.gemspec"
+```
+
+Bundler does not compile the extension of a `path:` gem. To install a `.gem` file that has no vendored library, set `BOLTFFI_RUBY_CARGO_MANIFEST`.
+
+### Source-only generation
+
+```bash
+boltffi generate ruby --experimental --deny-skipped
+```
+
+This writes the gem sources without the static library.
+
 ## Build Profiles
 
 Debug builds are faster but produce larger, slower binaries:

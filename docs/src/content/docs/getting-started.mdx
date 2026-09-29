@@ -1,6 +1,6 @@
 ---
 title: "Getting Started"
-description: "Set up a BoltFFI Rust library, install prerequisites, configure packaging, and generate bindings for Apple, Android, Java, C#, WASM, Python, and C targets."
+description: "Set up a BoltFFI Rust library, install prerequisites, configure packaging, and generate bindings for Apple, Android, Java, C#, WASM, Python, C, and Ruby targets."
 ---
 
 # Getting Started
@@ -17,6 +17,7 @@ This guide walks you through creating a Rust library and packaging it for use in
 - For WASM: Node.js 18+ and wasm-pack (`cargo install wasm-pack`)
 - For Python, Python 3.10+ with pip
 - For C, a C11 compiler such as GCC, Clang, or MSVC
+- For Ruby, Ruby 3.3+ with its development headers and a C compiler
 
 ## Install BoltFFI
 
@@ -259,6 +260,40 @@ cc -std=c11 main.c -I dist/c/include -L dist/c/lib -lmylib \
 ```
 
 The program prints `5`. See [linking a C program](/docs/c#link-a-c-program) for Windows commands and [memory management](/docs/c#memory-management) for cleanup rules.
+
+## Use in Ruby
+
+Enable the experimental target in `boltffi.toml`:
+
+```toml
+[targets.ruby]
+enabled = true
+output = "dist/ruby"
+```
+
+Then write the gem sources and build the static library into them:
+
+```sh
+boltffi pack ruby --experimental --release --deny-skipped
+```
+
+Build and install the gem. The install compiles the C extension:
+
+```sh
+cd dist/ruby
+gem build mylib.gemspec
+gem install --local ./mylib-0.1.0.gem
+```
+
+```ruby
+require "mylib"
+
+start = Mylib::Point.new(x: 0.0, y: 0.0)
+finish = Mylib::Point.new(x: 3.0, y: 4.0)
+puts Mylib.distance(start, finish) # 5.0
+```
+
+See [Ruby](/docs/ruby) for the type mapping and [Ruby packaging](/docs/packaging#ruby-experimental) for the gem layout.
 
 ## What you learned
 

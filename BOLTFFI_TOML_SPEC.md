@@ -562,6 +562,10 @@ Enable Ruby with `--experimental` or `experimental = ["ruby"]` at the top level.
 `pack ruby` requires the `staticlib` crate type and builds for the current
 host, which must be macOS or Linux.
 
+See [Ruby](https://www.boltffi.dev/docs/ruby) for the type mapping and
+[experimental Ruby limits](https://www.boltffi.dev/docs/experimental#ruby) for
+the remaining API restrictions.
+
 ## Dart
 
 ### `[targets.dart]` (optional)
