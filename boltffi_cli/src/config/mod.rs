@@ -19,9 +19,9 @@ pub use symbols::{DebugSymbolsBundle, DebugSymbolsConfig, DebugSymbolsFormat};
 pub use targets::{
     AndroidConfig, AndroidLinkConfig, AndroidPackConfig, AppleConfig, CConfig, CSharpConfig,
     DartConfig, HeaderConfig, JavaConfig, KotlinApiStyle, KotlinConfig, KotlinDesktopLoader,
-    KotlinFactoryStyle, KotlinMultiplatformConfig, PythonConfig, SpmConfig, SpmDistribution,
-    SpmLayout, SwiftConfig, TargetsConfig, WasmConfig, WasmNpmTarget, WasmOptimizeLevel,
-    WasmOptimizeOnMissing, WasmProfile, XcframeworkConfig,
+    KotlinFactoryStyle, KotlinMultiplatformConfig, PythonConfig, RubyConfig, SpmConfig,
+    SpmDistribution, SpmLayout, SwiftConfig, TargetsConfig, WasmConfig, WasmNpmTarget,
+    WasmOptimizeLevel, WasmOptimizeOnMissing, WasmProfile, XcframeworkConfig,
 };
 #[cfg(test)]
 pub use targets::{CSharpNugetConfig, JavaJvmConfig, PythonWheelConfig};
@@ -406,6 +406,10 @@ impl Config {
         self.targets.c.enabled
     }
 
+    pub fn is_ruby_enabled(&self) -> bool {
+        self.targets.ruby.enabled
+    }
+
     pub fn is_kotlin_multiplatform_enabled(&self) -> bool {
         self.targets.kotlin_multiplatform.enabled
     }
@@ -767,7 +771,7 @@ impl Config {
             Target::Python => self.is_python_enabled(),
             Target::CSharp => self.is_csharp_enabled(),
             Target::C => self.is_c_enabled(),
-            Target::Ruby => false,
+            Target::Ruby => self.is_ruby_enabled(),
         }
     }
 
@@ -922,6 +926,10 @@ impl Config {
 
     pub fn c_output(&self) -> PathBuf {
         self.targets.c.output.clone()
+    }
+
+    pub fn ruby_output(&self) -> PathBuf {
+        self.targets.ruby.output.clone()
     }
 
     pub fn csharp_namespace(&self) -> Option<&str> {
