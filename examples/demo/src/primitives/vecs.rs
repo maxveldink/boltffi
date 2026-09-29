@@ -370,12 +370,7 @@ pub fn inc_u64(values: &mut [u64]) {
 #[demo_bench_macros::demo_case(
     "primitives.vecs.u64.should_increment_value",
     justification = "Ensure a u64 value crosses the wire and returns incremented by one.",
-    directions = "Call `primitives::vecs::inc_u64_value` through the generated binding and assert a u64 value crosses the wire and returns incremented by one.",
-    exclude(
-        ruby,
-        reason = ExclusionReason::ImplementationGap,
-        details = "the Ruby target does not render functions yet"
-    )
+    directions = "Call `primitives::vecs::inc_u64_value` through the generated binding and assert a u64 value crosses the wire and returns incremented by one."
 )]
 #[export]
 #[benchmark_candidate(function, uniffi, wasm_bindgen)]

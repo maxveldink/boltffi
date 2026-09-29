@@ -1,16 +1,20 @@
 //! Ruby C extension host (experimental).
 //!
 //! The Ruby target renders a C extension that links the Rust static library
-//! and calls the shared C ABI (`CBridge`) directly. Every value will cross as
-//! a plain Ruby object that the extension builds eagerly, so Ruby code, and
-//! YJIT, see ordinary Ruby values.
+//! and calls the shared C ABI (`CBridge`) directly. Every value crosses as a
+//! plain Ruby object: `Integer`, `Float`, or `true`/`false`. The extension
+//! builds those objects eagerly, so Ruby code, and YJIT, see ordinary Ruby
+//! values.
 //!
-//! The target renders the gem and an extension that defines the Ruby module.
-//! It renders no declarations yet.
+//! The target renders synchronous free functions with scalar arguments and
+//! results. Strings, bytes, records, options, collections, enums, classes,
+//! callbacks, streams, async functions, constants, custom types, and fallible
+//! functions are not supported yet.
 
 mod render;
 mod runtime;
 mod support;
+mod symbol;
 
 use boltffi_binding::{
     Bindings, CallbackDecl, ClassDecl, ConstantDecl, CustomTypeDecl, EnumDecl, FunctionDecl,
@@ -27,7 +31,7 @@ use crate::{
 };
 
 use self::{
-    render::{extension, package::Package},
+    render::{extension, function::Function, package::Package},
     support::unsupported,
 };
 use super::{
@@ -140,10 +144,7 @@ impl host::HostBackend for RubyCExtHost {
                 BindingCapability::Records,
                 "records are not implemented in the Ruby host",
             )
-            .unsupported(
-                BindingCapability::Functions,
-                "functions are not implemented in the Ruby host",
-            )
+            .stable(BindingCapability::Functions)
             .unsupported(
                 BindingCapability::Enums,
                 "enums are not implemented in the Ruby host",
@@ -194,11 +195,11 @@ impl host::HostBackend for RubyCExtHost {
 
     fn function(
         &self,
-        _decl: &FunctionDecl<Self::Surface>,
-        _bridge: &Self::Bridge,
+        decl: &FunctionDecl<Self::Surface>,
+        bridge: &Self::Bridge,
         _context: &RenderContext<Self::Surface>,
     ) -> Result<Emitted> {
-        unsupported("function")
+        Function::from_declaration(decl, bridge)?.render()
     }
 
     fn class(
@@ -295,7 +296,7 @@ mod tests {
     use boltffi_ast::PackageInfo;
     use boltffi_binding::{Bindings, Native, lower};
 
-    use crate::core::GeneratedOutput;
+    use crate::core::{Error, GeneratedOutput};
 
     use super::RubyCExtHost;
 
@@ -323,6 +324,31 @@ mod tests {
             .find(|file| file.path().as_path() == Path::new(path))
             .map(|file| file.contents())
             .unwrap_or_else(|| panic!("generated file {path}"))
+    }
+
+    #[test]
+    fn ruby_target_renders_scalar_functions() {
+        let output = render(
+            RubyCExtHost::new(),
+            r#"
+            #[export]
+            pub fn add(left: i32, right: i32) -> i32 { left + right }
+
+            #[export]
+            pub fn flip(value: bool) -> bool { !value }
+
+            #[export]
+            pub fn scale(value: f64, factor: f32) -> f64 { value * factor as f64 }
+
+            #[export]
+            pub fn widen(value: u8, count: usize) -> u64 { value as u64 * count as u64 }
+
+            #[export]
+            pub fn noop() {}
+            "#,
+        );
+
+        insta::assert_snapshot!("ruby_scalar_functions", file(&output, "ext/demo/demo.c"));
     }
 
     #[test]
@@ -364,5 +390,114 @@ mod tests {
         assert!(file(&output, "ext/my_lib/my_lib.c").contains(
             "RUBY_FUNC_EXPORTED void Init_my_lib(void) {\n    VALUE boltffi_module = rb_define_module(\"MyLib\");\n    boltffi_module = rb_define_module_under(boltffi_module, \"Native\");"
         ));
+    }
+
+    #[test]
+    fn ruby_partial_render_skips_unsupported_declarations_with_coverage_entries() {
+        let source = r#"
+            #[data]
+            pub enum Mode { Fast, Slow }
+
+            #[export]
+            pub fn current_mode() -> Mode { Mode::Fast }
+
+            #[export]
+            pub fn parse(text: String) -> Result<i32, String> { text.parse().map_err(|_| text) }
+
+            #[export]
+            pub fn ok() -> bool { true }
+        "#;
+        let bindings = bindings(source);
+        let output = RubyCExtHost::new()
+            .into_target(&bindings)
+            .expect("Ruby target")
+            .render_partial(&bindings)
+            .expect("partial render");
+
+        let reasons = output
+            .coverage()
+            .unsupported()
+            .iter()
+            .map(|entry| format!("{}: {}", entry.declaration().name(), entry.reason()))
+            .collect::<Vec<_>>();
+        assert_eq!(
+            reasons,
+            [
+                "mode: enums are not implemented in the Ruby host",
+                "current::mode: enum return",
+                "parse: fallible function",
+            ]
+        );
+        let extension = file(&output, "ext/demo/demo.c");
+        assert!(extension.contains("\"ok\""));
+        assert!(!extension.contains("\"parse\""));
+        assert!(!extension.contains("\"current_mode\""));
+    }
+
+    #[test]
+    fn ruby_complete_render_rejects_unsupported_declarations() {
+        let bindings = bindings(
+            r#"
+            #[export]
+            pub fn parse(text: String) -> Result<i32, String> { text.parse().map_err(|_| text) }
+            "#,
+        );
+        let error = RubyCExtHost::new()
+            .into_target(&bindings)
+            .expect("Ruby target")
+            .render(&bindings)
+            .expect_err("fallible functions are unsupported");
+
+        assert!(matches!(
+            error,
+            Error::UnsupportedTarget {
+                target: "ruby",
+                shape: "fallible function"
+            }
+        ));
+    }
+
+    #[test]
+    fn ruby_escaped_function_names_cannot_collide() {
+        let bindings = bindings(
+            r#"
+            #[export]
+            pub fn freeze() {}
+
+            #[export]
+            pub fn freeze_() {}
+            "#,
+        );
+        let error = RubyCExtHost::new()
+            .into_target(&bindings)
+            .expect("Ruby target")
+            .render(&bindings)
+            .expect_err("both functions want freeze_");
+
+        assert!(matches!(
+            error,
+            Error::RubyNameCollision { ref name, .. } if name == "freeze_"
+        ));
+    }
+
+    #[test]
+    fn ruby_functions_with_more_than_fifteen_arguments_use_variadic_arity() {
+        let params = (0..16)
+            .map(|index| format!("a{index}: u8"))
+            .collect::<Vec<_>>()
+            .join(", ");
+        let output = render(
+            RubyCExtHost::new(),
+            &format!("#[export] pub fn wide({params}) -> u8 {{ a15 }}"),
+        );
+        let extension = file(&output, "ext/demo/demo.c");
+
+        assert!(
+            extension.contains(
+                "(int argc, VALUE *argv, VALUE self) {\n    rb_check_arity(argc, 16, 16);"
+            )
+        );
+        assert!(extension.contains("uint8_t boltffi_value_15 = boltffi_ruby_to_u8(argv[15]);"));
+        assert!(extension.contains("\"wide\", boltffi_ruby_fn_boltffi_function_demo_wide, -1);"));
     }
 }
