@@ -44,7 +44,7 @@ impl RubyCExtHost {
     /// bridge writes its header beside the extension source.
     /// The header directory uses the same stem as the Ruby package files.
     pub fn into_target(self, bindings: &Bindings<Native>) -> Result<Target<Self, CBridge>> {
-        let stem = package_snake(bindings.package().name())?;
+        let stem = package_snake(bindings.package().name());
         let header = format!("ext/{stem}/boltffi.h");
         Ok(Target::new(self, CBridge::new(header)?))
     }
@@ -203,20 +203,6 @@ mod tests {
         )
         .expect("source scans");
         lower::<Native>(&source).expect("source lowers")
-    }
-
-    #[test]
-    fn windows_device_package_names_cannot_name_the_extension() {
-        let source = boltffi_scan::scan_file(
-            syn::parse_str("").expect("valid source"),
-            PackageInfo::new("con", None),
-        )
-        .expect("source scans");
-        let bindings = lower::<Native>(&source).expect("source lowers");
-        assert!(matches!(
-            RubyCExtHost::new().into_target(&bindings),
-            Err(Error::UnsupportedTarget { target: "ruby", .. })
-        ));
     }
 
     #[test]

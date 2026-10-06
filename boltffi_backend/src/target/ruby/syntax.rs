@@ -236,14 +236,9 @@ impl Identifier {
     }
 
     fn escape(identifier: String, reserved: impl Fn(&str) -> bool) -> Result<Self> {
-        let valid = identifier
-            .chars()
-            .next()
-            .is_some_and(|first| first == '_' || first.is_ascii_lowercase())
-            && identifier
-                .chars()
-                .all(|character| character == '_' || character.is_ascii_alphanumeric());
-        if !valid {
+        if !ascii_word(&identifier, |first| {
+            first == '_' || first.is_ascii_lowercase()
+        }) {
             return Err(Error::InvalidRubyIdentifier { identifier });
         }
         if reserved(&identifier) {
@@ -258,18 +253,23 @@ impl Identifier {
     }
 }
 
+/// Returns whether `text` starts with a character `first` accepts and
+/// continues with ASCII letters, digits, or underscores.
+///
+/// The first character decides the Ruby role: a lowercase start is a method
+/// or member name, and an uppercase start is a constant.
+fn ascii_word(text: &str, first: impl Fn(char) -> bool) -> bool {
+    let mut characters = text.chars();
+    characters.next().is_some_and(first)
+        && characters.all(|character| character == '_' || character.is_ascii_alphanumeric())
+}
+
 impl Constant {
     /// Parses a Ruby constant name made of ASCII word characters.
     /// Rejects keywords because the constant can start a Ruby expression.
     pub fn parse(constant: impl Into<String>) -> Result<Self> {
         let constant = constant.into();
-        let valid = constant
-            .chars()
-            .next()
-            .is_some_and(|first| first.is_ascii_uppercase())
-            && constant
-                .chars()
-                .all(|character| character == '_' || character.is_ascii_alphanumeric())
+        let valid = ascii_word(&constant, |first| first.is_ascii_uppercase())
             && !Syntax::keyword(&constant);
         if valid {
             Ok(Self(constant))

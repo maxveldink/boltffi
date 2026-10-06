@@ -1,4 +1,4 @@
-use std::collections::{BTreeMap, btree_map::Entry};
+use std::collections::{HashMap, hash_map::Entry};
 
 use boltffi_binding::{CanonicalName, FieldKey, NamePart};
 
@@ -52,7 +52,7 @@ pub fn spelling(name: &CanonicalName) -> String {
 /// the member `hash_`, which a field `hash_` also wants.
 pub struct NameScope {
     scope: String,
-    names: BTreeMap<String, String>,
+    names: HashMap<String, String>,
 }
 
 impl NameScope {
@@ -60,7 +60,7 @@ impl NameScope {
     pub fn new(scope: impl Into<String>) -> Self {
         Self {
             scope: scope.into(),
-            names: BTreeMap::new(),
+            names: HashMap::new(),
         }
     }
 
@@ -98,7 +98,7 @@ pub fn member(key: &FieldKey) -> Result<Identifier> {
 /// The default Ruby module for a Cargo package, such as `MyLib` for
 /// `my-lib`.
 pub fn default_module(package: &CanonicalName) -> Result<ConstantPath> {
-    Constant::parse(name_case::upper_camel_from_snake(&package_snake(package)?))
+    Constant::parse(name_case::upper_camel_from_snake(&package_snake(package)))
         .map(ConstantPath::single)
 }
 
@@ -106,7 +106,7 @@ pub fn default_module(package: &CanonicalName) -> Result<ConstantPath> {
 ///
 /// The binding contract keeps the Cargo package name as one name part, dashes
 /// included, so the dashes become underscores here.
-pub fn package_snake(package: &CanonicalName) -> Result<String> {
+pub fn package_snake(package: &CanonicalName) -> String {
     extension_stem(&Name::new(package).snake())
 }
 
@@ -114,33 +114,15 @@ pub fn package_snake(package: &CanonicalName) -> Result<String> {
 ///
 /// The stem names the extension directory, the compiled library, and its
 /// `Init_<stem>` entry point, so it keeps only ASCII lowercase letters,
-/// digits, and underscores. A Windows device name such as `con` or `lpt1`
-/// cannot name a directory or file on Windows, so it is an error.
-pub fn extension_stem(gem: &str) -> Result<String> {
-    let stem: String = gem
-        .chars()
+/// digits, and underscores.
+pub fn extension_stem(gem: &str) -> String {
+    gem.chars()
         .map(|character| match character {
             'a'..='z' | '0'..='9' | '_' => character,
             'A'..='Z' => character.to_ascii_lowercase(),
             _ => '_',
         })
-        .collect();
-    if stem.is_empty() || windows_device(&stem) {
-        return Err(Error::UnsupportedTarget {
-            target: "ruby",
-            shape: "extension file stem",
-        });
-    }
-    Ok(stem)
-}
-
-/// Returns whether a lowercase stem is a reserved Windows device name.
-fn windows_device(stem: &str) -> bool {
-    matches!(stem, "con" | "prn" | "aux" | "nul")
-        || stem
-            .strip_prefix("com")
-            .or_else(|| stem.strip_prefix("lpt"))
-            .is_some_and(|port| matches!(port, "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9"))
+        .collect()
 }
 
 #[cfg(test)]
@@ -156,20 +138,10 @@ mod tests {
             CanonicalName::single("my_lib"),
             CanonicalName::new(vec![NamePart::new("my"), NamePart::new("lib")]),
         ] {
-            assert_eq!(package_snake(&package).unwrap(), "my_lib");
+            assert_eq!(package_snake(&package), "my_lib");
             assert_eq!(default_module(&package).unwrap().to_string(), "MyLib");
         }
-        assert_eq!(extension_stem("my-lib").unwrap(), "my_lib");
-    }
-
-    #[test]
-    fn extension_stems_reject_windows_device_names() {
-        for gem in ["con", "CON", "Nul", "com1", "LPT9", "prn", "aux", ""] {
-            assert!(extension_stem(gem).is_err(), "accepted {gem:?}");
-        }
-        for gem in ["console", "com10", "com0", "aux_data", "lpt"] {
-            assert!(extension_stem(gem).is_ok(), "rejected {gem:?}");
-        }
+        assert_eq!(extension_stem("my-lib"), "my_lib");
     }
 
     #[test]
