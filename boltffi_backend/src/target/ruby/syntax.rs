@@ -1,5 +1,7 @@
 use std::fmt;
 
+use ruby_prism::Node;
+
 use crate::{
     bridge::c,
     core::{Error, LanguageSyntax, Result, syntax::sealed},
@@ -32,56 +34,34 @@ pub struct ConstantPath(Vec<Constant>);
 pub struct Literal(String);
 
 impl LanguageSyntax for Syntax {
-    const KEYWORDS: &'static [&'static str] = &[
-        "BEGIN",
-        "END",
-        "__ENCODING__",
-        "__FILE__",
-        "__LINE__",
-        "alias",
-        "and",
-        "begin",
-        "break",
-        "case",
-        "class",
-        "def",
-        "defined?",
-        "do",
-        "else",
-        "elsif",
-        "end",
-        "ensure",
-        "false",
-        "for",
-        "if",
-        "in",
-        "module",
-        "next",
-        "nil",
-        "not",
-        "or",
-        "redo",
-        "rescue",
-        "retry",
-        "return",
-        "self",
-        "super",
-        "then",
-        "true",
-        "undef",
-        "unless",
-        "until",
-        "when",
-        "while",
-        "yield",
-    ];
-
     type Identifier = Identifier;
     type Type = c::TypeFragment;
     type Expr = c::Expression;
     type Stmt = c::Statement;
     type Literal = Literal;
     type Arguments = c::ArgumentList;
+
+    fn keyword(identifier: &str) -> bool {
+        let word = identifier.strip_suffix('?').unwrap_or(identifier);
+        if !ascii_word(word, |first| first == '_' || first.is_ascii_alphabetic()) {
+            return false;
+        }
+
+        let parsed = ruby_prism::parse(identifier.as_bytes());
+        if parsed.errors().next().is_some() {
+            return true;
+        }
+
+        // Bare names produce calls or constant reads. Keywords produce other nodes.
+        let program = parsed
+            .node()
+            .as_program_node()
+            .expect("Prism parses a program");
+        !matches!(
+            program.statements().body().iter().next(),
+            Some(Node::CallNode { .. } | Node::ConstantReadNode { .. })
+        )
+    }
 }
 
 impl sealed::LanguageSyntax for Syntax {}
@@ -193,7 +173,9 @@ impl sealed::SyntaxFragment for Literal {}
 
 #[cfg(test)]
 mod tests {
-    use super::{Constant, ConstantPath, Literal};
+    use crate::core::LanguageSyntax;
+
+    use super::{Constant, ConstantPath, Literal, Syntax};
 
     #[test]
     fn constants_reject_invalid_ruby_names() {
@@ -214,6 +196,32 @@ mod tests {
         }
         assert_eq!(Constant::parse("Begin").unwrap().as_str(), "Begin");
         assert_eq!(Constant::parse("End").unwrap().as_str(), "End");
+    }
+
+    #[test]
+    fn keyword_predicate_rejects_keywords_and_source_markers() {
+        for reserved in [
+            "class",
+            "defined?",
+            "nil",
+            "self",
+            "__FILE__",
+            "__LINE__",
+            "__ENCODING__",
+            "__END__",
+        ] {
+            assert!(Syntax::keyword(reserved), "accepted {reserved}");
+        }
+        for ordinary in ["class?", "defined", "Nil", "begin_", "Point", "_1", "it"] {
+            assert!(!Syntax::keyword(ordinary), "reserved {ordinary}");
+        }
+    }
+
+    #[test]
+    fn keyword_predicate_does_not_classify_other_source_as_a_keyword() {
+        for source in ["", "class Point; end", "1", "Point::Native", "name + other"] {
+            assert!(!Syntax::keyword(source), "reserved {source}");
+        }
     }
 
     #[test]

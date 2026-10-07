@@ -588,6 +588,11 @@ remaining API restrictions.
 
 Enable Ruby with `--experimental` or `experimental = ["ruby"]` at the top level.
 
+Generated gems declare `spec.required_ruby_version = ">= 3.3"`.
+`[targets.ruby]` does not select a Ruby grammar version.
+The `version` setting below sets the gem version, not the Ruby version.
+The current `ruby-prism` 1.9.0 check uses Ruby 4.1 grammar by default.
+
 - `enabled` (bool): Whether Ruby generation and packaging are active.
   - Default: `false`
 - `output` (path): Gem source root.
@@ -603,6 +608,8 @@ Enable Ruby with `--experimental` or `experimental = ["ruby"]` at the top level.
 - `module_name` (string, optional): Ruby module that holds the functions and
   records, such as `MyLib::Native`.
   - Default: the Cargo package name in `UpperCamelCase`.
+  - Each segment must start with an ASCII uppercase letter and contain only ASCII letters, digits, or underscores.
+  - Prism checks reserved names during generation, so names such as `BEGIN` and `END` are invalid.
 - `version` (string, optional): Gem version.
   - Default: the selected Cargo package's version.
 - `cargo_manifest` (string, optional): Crate manifest path, relative to
