@@ -46,12 +46,12 @@ impl RecordSymbols {
         })
     }
 
-    /// The static `VALUE` that holds the record's `Data` class.
+    /// The static `VALUE` that holds the record's `Struct` class.
     pub fn class(&self) -> &Identifier {
         &self.class
     }
 
-    /// Builds the `Data` instance from member values in declaration order.
+    /// Builds a frozen `Struct` instance from member values in declaration order.
     pub fn builder(&self) -> &Identifier {
         &self.builder
     }

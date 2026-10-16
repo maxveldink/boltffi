@@ -1,5 +1,5 @@
 static VALUE {{ record.symbols.builder() }}(const VALUE *values) {
-    return rb_funcallv({{ record.symbols.class() }}, rb_intern("new"), {{ record.members.len() }}, values);
+    return rb_obj_freeze(rb_funcallv({{ record.symbols.class() }}, rb_intern("new"), {{ record.members.len() }}, values));
 }
 {%- match record.body %}
 {%- when Body::Direct(direct) %}

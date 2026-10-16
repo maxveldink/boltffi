@@ -9,8 +9,10 @@ class StringRecordTest < Minitest::Test
   end
 
   def test_address
-    address = Demo::Address.new(street: "Main St", city: "Amsterdam", zip: "1000AA")
+    address = Demo::Address.new(street: "Main St", city: "Amsterdam", zip_: "1000AA")
     assert_equal(address, Demo.echo_address(address), "case:records.with_strings.address.should_roundtrip_value")
     assert_equal("Main St, Amsterdam, 1000AA", Demo.format_address(address), "case:records.with_strings.address.should_format_value")
+    assert_equal("1000AA", address.zip_)
+    assert_equal([["Main St", 1], ["Amsterdam", 2], ["1000AA", 3]], address.zip([1, 2, 3]))
   end
 end

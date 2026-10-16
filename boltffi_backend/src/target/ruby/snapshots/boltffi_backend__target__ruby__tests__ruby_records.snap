@@ -16,7 +16,7 @@ BOLTFFI_RUBY_MAYBE_UNUSED static VALUE boltffi_ruby_read_Shape(boltffi_ruby_read
 BOLTFFI_RUBY_MAYBE_UNUSED static void boltffi_ruby_write_Shape(boltffi_ruby_writer *writer, VALUE value);
 
 static VALUE boltffi_ruby_build_Point(const VALUE *values) {
-    return rb_funcallv(boltffi_ruby_class_Point, rb_intern("new"), 2, values);
+    return rb_obj_freeze(rb_funcallv(boltffi_ruby_class_Point, rb_intern("new"), 2, values));
 }
 
 BOLTFFI_RUBY_MAYBE_UNUSED static VALUE boltffi_ruby_box_Point(___Point value) {
@@ -47,7 +47,7 @@ BOLTFFI_RUBY_MAYBE_UNUSED static void boltffi_ruby_write_Point(boltffi_ruby_writ
 }
 
 static VALUE boltffi_ruby_build_Shape(const VALUE *values) {
-    return rb_funcallv(boltffi_ruby_class_Shape, rb_intern("new"), 5, values);
+    return rb_obj_freeze(rb_funcallv(boltffi_ruby_class_Shape, rb_intern("new"), 5, values));
 }
 
 static int boltffi_ruby_write_Shape_field4_map_0(VALUE boltffi_bound_0, VALUE boltffi_bound_1, VALUE boltffi_argument) {
@@ -194,10 +194,10 @@ static VALUE boltffi_ruby_fn_boltffi_function_demo_echo_shape(VALUE self, VALUE 
 RUBY_FUNC_EXPORTED void Init_demo(void) {
     VALUE boltffi_module = rb_define_module("Demo");
     rb_global_variable(&boltffi_ruby_class_Point);
-    boltffi_ruby_class_Point = rb_data_define(0, "x", "y", NULL);
+    boltffi_ruby_class_Point = rb_struct_define(NULL, "x", "y", NULL);
     rb_define_const(boltffi_module, "Point", boltffi_ruby_class_Point);
     rb_global_variable(&boltffi_ruby_class_Shape);
-    boltffi_ruby_class_Shape = rb_data_define(0, "name", "hash_", "points", "center", "labels", NULL);
+    boltffi_ruby_class_Shape = rb_struct_define(NULL, "name", "hash_", "points", "center", "labels", NULL);
     rb_define_const(boltffi_module, "Shape", boltffi_ruby_class_Shape);
     rb_define_module_function(boltffi_module, "echo_point", boltffi_ruby_fn_boltffi_function_demo_echo_point, 1);
     rb_define_module_function(boltffi_module, "points", boltffi_ruby_fn_boltffi_function_demo_points, 1);

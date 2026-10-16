@@ -3,8 +3,8 @@
 //! The Ruby target renders a C extension that links the Rust static library
 //! and calls the shared C ABI (`CBridge`) directly. Every value crosses as a
 //! plain Ruby object: `Integer`, `Float`, `true`/`false`, `String`, `Array`,
-//! `Hash`, `nil`, and one frozen `Data` class per record. The extension builds
-//! those objects eagerly, so Ruby code, and YJIT, see ordinary Ruby values.
+//! `Hash`, `nil`, and one `Struct` class per record. The extension freezes returned
+//! record instances and builds every value eagerly, so Ruby code sees ordinary Ruby values.
 //!
 //! The target renders synchronous free functions and records. Enums, classes,
 //! callbacks, streams, async functions, constants, custom types, and fallible

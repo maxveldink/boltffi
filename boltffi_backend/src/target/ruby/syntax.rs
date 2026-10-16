@@ -9,12 +9,12 @@ use crate::{
 ///
 /// The Ruby target emits a C extension, so its types, expressions,
 /// statements, and argument lists are the C bridge fragments. The Ruby-facing
-/// names inside that C (method names, `Data` member names, constant names)
+/// names inside that C (method names, `Struct` member names, constant names)
 /// and the literals in the Ruby package files use the fragments below.
 #[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
 pub struct Syntax;
 
-/// A Ruby method or `Data` member name, such as `echo_string`.
+/// A Ruby method or `Struct` member name, such as `echo_string`.
 #[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct Identifier(String);
 
@@ -30,22 +30,17 @@ pub struct ConstantPath(Vec<Constant>);
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub struct Literal(String);
 
-/// Methods every Ruby object and every `Data` instance answers.
+/// Methods every Ruby object answers.
 ///
-/// A record member with one of these names would replace the method on every
-/// instance: a member named `hash` breaks every `Hash` that holds the record.
-/// The list is `Object`, `Kernel`, `BasicObject`, and `Data` public instance
-/// methods whose names Rust can spell, plus the private `initialize` family
-/// and the private hooks that Ruby calls on any object, such as
-/// `singleton_method_added`. Ruby keywords are not in the list: `record.end`
-/// is a valid call.
+/// A record member named `hash` would replace the hashing method.
+/// The list includes public methods that Rust can spell and private initialization
+/// methods and hooks that Ruby calls.
+/// Ruby keywords are not in the list: `record.end` is a valid call.
 const OBJECT_METHODS: &[&str] = &[
     "__id__",
     "__send__",
     "class",
     "clone",
-    "deconstruct",
-    "deconstruct_keys",
     "define_singleton_method",
     "display",
     "dup",
@@ -64,7 +59,6 @@ const OBJECT_METHODS: &[&str] = &[
     "instance_variable_set",
     "instance_variables",
     "itself",
-    "members",
     "method",
     "method_missing",
     "methods",
@@ -85,10 +79,80 @@ const OBJECT_METHODS: &[&str] = &[
     "tap",
     "then",
     "to_enum",
-    "to_h",
     "to_s",
-    "with",
     "yield_self",
+];
+
+/// `Struct` and `Enumerable` methods that record members must not replace.
+///
+/// Keep these separate from module methods.
+/// A field named `size` becomes `size_`, but a module function keeps `size`.
+const STRUCT_METHODS: &[&str] = &[
+    "chain",
+    "chunk",
+    "chunk_while",
+    "collect",
+    "collect_concat",
+    "compact",
+    "count",
+    "cycle",
+    "deconstruct",
+    "deconstruct_keys",
+    "detect",
+    "dig",
+    "drop",
+    "drop_while",
+    "each",
+    "each_cons",
+    "each_entry",
+    "each_pair",
+    "each_slice",
+    "each_with_index",
+    "each_with_object",
+    "entries",
+    "filter",
+    "filter_map",
+    "find",
+    "find_all",
+    "find_index",
+    "first",
+    "flat_map",
+    "grep",
+    "grep_v",
+    "group_by",
+    "inject",
+    "lazy",
+    "length",
+    "map",
+    "max",
+    "max_by",
+    "members",
+    "min",
+    "min_by",
+    "minmax",
+    "minmax_by",
+    "partition",
+    "reduce",
+    "reject",
+    "reverse_each",
+    "select",
+    "size",
+    "slice_after",
+    "slice_before",
+    "slice_when",
+    "sort",
+    "sort_by",
+    "sum",
+    "take",
+    "take_while",
+    "tally",
+    "to_a",
+    "to_h",
+    "to_set",
+    "uniq",
+    "values",
+    "values_at",
+    "zip",
 ];
 
 /// Methods every Ruby module answers, in addition to [`OBJECT_METHODS`].
@@ -227,10 +291,12 @@ impl Identifier {
 
     /// Parses a record member name.
     ///
-    /// A name that every Ruby object already answers gets a trailing
+    /// A name that a Ruby object or `Struct` already answers gets a trailing
     /// underscore, so a Rust field named `hash` becomes the member `hash_`.
     pub fn member(identifier: impl Into<String>) -> Result<Self> {
-        Self::escape(identifier.into(), |name| OBJECT_METHODS.contains(&name))
+        Self::escape(identifier.into(), |name| {
+            OBJECT_METHODS.contains(&name) || STRUCT_METHODS.contains(&name)
+        })
     }
 
     fn escape(identifier: String, reserved: impl Fn(&str) -> bool) -> Result<Self> {
@@ -381,6 +447,19 @@ mod tests {
             Identifier::module_function("echo_string").unwrap().as_str(),
             "echo_string"
         );
+    }
+
+    #[test]
+    fn struct_methods_are_reserved_only_for_record_members() {
+        for name in ["each", "size", "values", "dig", "map", "to_h"] {
+            assert_eq!(
+                Identifier::member(name).unwrap().as_str(),
+                format!("{name}_")
+            );
+            assert_eq!(Identifier::module_function(name).unwrap().as_str(), name);
+        }
+        assert_eq!(Identifier::member("with").unwrap().as_str(), "with");
+        assert_eq!(Identifier::member("end").unwrap().as_str(), "end");
     }
 
     #[test]

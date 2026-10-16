@@ -1,20 +1,18 @@
-//! Records as Ruby `Data` classes.
+//! Records as Ruby `Struct` classes.
 //!
-//! A record crosses the boundary as a frozen `Data` instance with one member
-//! per field. The extension builds each instance eagerly, so Ruby code reads
-//! fields through plain `Data` readers that YJIT compiles like `attr_reader`.
+//! A record crosses the boundary as a frozen `Struct` instance with one member
+//! per field. The extension builds each instance eagerly.
+//! Ruby code reads fields through ordinary `Struct` readers.
 //!
-//! The extension builds each instance through the class's public `new`, so
-//! a returned record is exactly what `Point.new(x:, y:)` returns, including
-//! any `initialize` that the program defines. Writing the members directly
-//! would be faster. That change can come later, with its tradeoffs.
+//! The extension calls the class's public `new`, then freezes the returned
+//! instance. A custom `initialize` still runs before the extension freezes it.
+//! Caller-created instances can remain mutable.
 //!
-//! Arguments rely on Ruby storing a `Data` instance as a `Struct`:
-//! `RSTRUCT_GET` reads each member. Reading through the member methods
-//! instead would run Ruby code while the extension encodes an argument.
+//! `RSTRUCT_GET` reads argument fields directly.
+//! Reading through member methods would run Ruby code during argument encoding.
 //!
-//! A direct record also crosses as its C struct: the box and unbox functions
-//! convert between that struct and the `Data` instance.
+//! A direct record also crosses as its C struct.
+//! The box and unbox functions convert between that struct and the Ruby instance.
 
 use askama::Template;
 use boltffi_binding::{DirectRecordDecl, EncodedRecordDecl, FieldKey, Native, RecordDecl};
@@ -79,7 +77,7 @@ struct EncodedField {
     write: Statement,
 }
 
-/// The `Data` class definition for one rendered record.
+/// The `Struct` class definition for one rendered record.
 pub struct Registration {
     pub constant: Constant,
     pub class: Identifier,
@@ -189,7 +187,7 @@ impl Registration {
     /// Builds the registration and rejects two fields that share a member.
     pub fn from_declaration(declaration: &RecordDecl<Native>) -> Result<Self> {
         let constant = Name::new(declaration.name()).constant()?;
-        // `Data.define` raises at load time for a duplicate member.
+        // `Struct.new` raises at load time for a duplicate member.
         let mut scope = NameScope::new(format!("record `{constant}` members"));
         let members = field_keys(declaration)?
             .into_iter()

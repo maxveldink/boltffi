@@ -23,7 +23,7 @@ struct ExtensionTemplate {
     functions: Vec<ModuleFunction>,
 }
 
-/// One `Data` class that `Init_` defines.
+/// One `Struct` class that `Init_` defines.
 struct RecordClass {
     class: Identifier,
     constant: Literal,

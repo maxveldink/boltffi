@@ -121,11 +121,13 @@ class ConversionsTest < Minitest::Test
     assert_equal({ "key" => [3] }, Demo.echo_hash_map({ "key" => [3] }))
   end
 
-  def test_records_are_frozen_data_values
+  def test_returned_records_are_frozen_struct_values
     point = Demo.make_point(1.0, 2.0)
 
-    assert_kind_of(Data, point)
+    assert_kind_of(Struct, point)
     assert_predicate(point, :frozen?)
+    assert_raises(FrozenError) { point.x = 3.0 }
+    assert_raises(FrozenError) { point[:x] = 3.0 }
     assert_equal(Demo::Point.new(x: 1.0, y: 2.0), point)
     assert_equal({ x: 1.0, y: 2.0 }, point.to_h)
     assert_raises(TypeError) { Demo.echo_point({ x: 1.0, y: 2.0 }) }
@@ -141,6 +143,30 @@ class ConversionsTest < Minitest::Test
     subclass = Class.new(Demo::Point)
 
     assert_equal(Demo::Point.new(x: 3.0, y: 4.0), Demo.echo_point(subclass.new(x: 3.0, y: 4.0)))
+  end
+
+  def test_caller_created_records_can_change_before_crossing
+    point = Demo::Point.new(x: 1.0, y: 2.0)
+    point.x = 3.0
+    point[:y] = 4.0
+
+    result = Demo.echo_point(point)
+    assert_equal({ x: 3.0, y: 4.0 }, result.to_h)
+    assert_predicate(result, :frozen?)
+    refute_predicate(point, :frozen?)
+
+    point.x = "invalid"
+    assert_raises(TypeError) { Demo.echo_point(point) }
+  end
+
+  def test_encoded_records_freeze_only_the_record
+    person = Demo.make_person("Ada", 36)
+
+    assert_kind_of(Struct, person)
+    assert_predicate(person, :frozen?)
+    assert_raises(FrozenError) { person.age = 37 }
+    person.name << " Lovelace"
+    assert_equal("Hello, Ada Lovelace! You are 36 years old.", Demo.greet_person(person))
   end
 
   def test_functions_use_fixed_arity

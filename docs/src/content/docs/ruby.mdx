@@ -37,7 +37,7 @@ Every value becomes a plain Ruby object when it crosses the boundary. The extens
 | `Vec<T>`, tuples | `Array` |
 | `HashMap<K, V>`, `BTreeMap<K, V>` | `Hash` |
 | `Option<T>` | `nil` or the value |
-| `#[data]` struct | frozen `Data` instance |
+| `#[data]` struct | frozen `Struct` instance returned by Rust |
 | `()` | `nil` |
 
 Arguments are checked before Rust runs:
@@ -46,22 +46,31 @@ Arguments are checked before Rust runs:
 - A float argument accepts `Float` and `Integer`. An `Integer` too large for a `Float` raises `RangeError`.
 - A `bool` argument accepts only `true` and `false`.
 - A string argument must be a `String` with valid UTF-8. An ASCII-only string in another ASCII-compatible encoding passes. Other strings raise `ArgumentError` or `Encoding::CompatibilityError`; transcode them with `String#encode` first.
-- An array, hash, or record argument must be an `Array`, a `Hash`, or an instance of its `Data` class.
+- An array, hash, or record argument must be an `Array`, a `Hash`, or an instance of its generated `Struct` class.
 
 The checks read each value's type and never call a conversion method such as `to_str`, `to_ary`, or `to_hash`, so no Ruby code runs while the extension encodes an argument. If Rust still rejects an encoded argument, the call raises `ArgumentError` with Rust's message. For example, a `Hash` that compares by identity can hold two equal keys, which a Rust map rejects.
 
 ## Records
 
-Each `#[data]` struct becomes a `Data` class under the module, with one member per field:
+Each `#[data]` struct becomes a `Struct` class under the module, with one member per field.
+Callers can construct records with keyword or positional arguments:
 
 ```ruby
 point = Mylib::Point.new(x: 1.0, y: 2.0)
 point.x        # => 1.0
-point.frozen?  # => true
+point.frozen?  # => false
 point.to_h     # => {x: 1.0, y: 2.0}
 ```
 
-A field whose name is also a method of every Ruby object, such as `hash` or `class`, gets a trailing underscore: `record.hash_`. A function whose name is also a method of every Ruby module, such as `name`, gets one too: `Mylib.name_`.
+The extension freezes each record that Rust returns after the record's initializer runs.
+Caller-created records can remain mutable.
+The freeze does not freeze strings, arrays, or hashes stored in fields.
+Arguments can be mutable or frozen, but every field must match its Rust type when the call starts.
+
+Field names cannot replace `Object`, `Struct`, or `Enumerable` methods.
+The generator adds a trailing underscore: `hash` becomes `hash_`, and `zip` becomes `zip_`.
+Module functions reserve only `Object` and `Module` methods.
+For example, `name` becomes `name_`, but `size` stays `size`.
 
 ## Panics
 

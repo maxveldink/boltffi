@@ -13,7 +13,7 @@ RUBY_FUNC_EXPORTED void {{ init }}(void) {
 {%- endfor %}
 {%- for record in records %}
     rb_global_variable(&{{ record.class }});
-    {{ record.class }} = rb_data_define(0{% for member in record.members %}, {{ member }}{% endfor %}, NULL);
+    {{ record.class }} = rb_struct_define(NULL{% for member in record.members %}, {{ member }}{% endfor %}, NULL);
     rb_define_const(boltffi_module, {{ record.constant }}, {{ record.class }});
 {%- endfor %}
 {%- for function in functions %}

@@ -77,7 +77,7 @@ impl NameScope {
     }
 }
 
-/// The `Data` member name for one record field.
+/// The `Struct` member name for one record field.
 ///
 /// Tuple fields have no name in Rust, so field `0` becomes `field_0`.
 pub fn member(key: &FieldKey) -> Result<Identifier> {
