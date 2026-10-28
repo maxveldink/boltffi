@@ -12,12 +12,10 @@ wasm_dir="$repo_root/examples/platforms/wasm"
 python_dir="$repo_root/examples/platforms/python"
 dart_dir="$repo_root/examples/platforms/dart"
 c_dir="$repo_root/examples/platforms/c"
-ruby_dir="$repo_root/examples/platforms/ruby"
 workspace_manifest="$repo_root/Cargo.toml"
 
 selected_platforms=()
 python_interpreter=""
-ruby_interpreter=""
 
 run_step() {
     local title="$1"
@@ -89,12 +87,9 @@ pack_host_dart() {
 host_default_platforms() {
     case "$(uname -s)" in
         Darwin)
-            printf '%s\n' apple kotlin java csharp wasm python dart c ruby
+            printf '%s\n' apple kotlin java csharp wasm python dart c
             ;;
-        Linux)
-            printf '%s\n' java csharp wasm python dart c ruby
-            ;;
-        MINGW*|MSYS*|CYGWIN*)
+        Linux|MINGW*|MSYS*|CYGWIN*)
             printf '%s\n' java csharp wasm python dart c
             ;;
         *)
@@ -148,16 +143,12 @@ while [[ $# -gt 0 ]]; do
             python_interpreter="${2:-}"
             shift 2
             ;;
-        --ruby)
-            ruby_interpreter="${2:-}"
-            shift 2
-            ;;
         --host-defaults)
             shift
             ;;
         *)
             printf 'Unknown argument: %s\n' "$1" >&2
-            printf 'Usage: %s [--platform <apple|kotlin|java|csharp|wasm|python|dart|c|ruby>] [--python <interpreter>] [--ruby <interpreter>] [--host-defaults]\n' "$0" >&2
+            printf 'Usage: %s [--platform <apple|kotlin|java|csharp|wasm|python|dart|c>] [--python <interpreter>] [--host-defaults]\n' "$0" >&2
             exit 2
             ;;
     esac
@@ -207,14 +198,6 @@ for selected_platform in "${selected_platforms[@]}"; do
             ;;
         c)
             run_step "c demo" "$c_dir/test-demo.sh"
-            ;;
-        ruby)
-            run_step "pack ruby" run_boltffi pack ruby --release --experimental
-            if [[ -n "$ruby_interpreter" ]]; then
-                run_step "ruby demo" "$ruby_dir/test-demo.sh" --ruby "$ruby_interpreter"
-            else
-                run_step "ruby demo" "$ruby_dir/test-demo.sh"
-            fi
             ;;
         *)
             printf 'Unsupported demo platform: %s\n' "$selected_platform" >&2
