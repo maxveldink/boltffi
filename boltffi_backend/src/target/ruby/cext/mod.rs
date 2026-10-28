@@ -5,8 +5,10 @@
 //! a plain Ruby object that the extension builds eagerly, so Ruby code, and
 //! YJIT, see ordinary Ruby values.
 //!
-//! The target renders the gem and an extension that defines the Ruby module.
-//! It renders no declarations yet.
+//! The target renders an extension that defines the Ruby module, and the
+//! `extconf.rb` that builds the Rust crate with cargo when the gem installs.
+//! It also renders a starter gemspec and `lib/` entry file. The gem author
+//! owns those two files after the first write. It renders no declarations yet.
 
 mod render;
 mod support;
@@ -40,8 +42,8 @@ use super::{
 pub struct RubyCExtHost {
     module: Option<ConstantPath>,
     gem: Option<String>,
-    version: Option<String>,
     library: Option<String>,
+    feature_arguments: Vec<String>,
 }
 
 impl RubyCExtHost {
@@ -77,15 +79,22 @@ impl RubyCExtHost {
         Ok(self)
     }
 
-    /// Selects the gem version.
-    pub fn version(mut self, version: Option<String>) -> Self {
-        self.version = version;
-        self
-    }
-
     /// Selects the Rust library artifact name, `demo` for `libdemo.a`.
     pub fn native_library(mut self, library: impl Into<String>) -> Self {
         self.library = Some(library.into());
+        self
+    }
+
+    /// Selects the Cargo feature arguments that `extconf.rb` builds the crate
+    /// with, such as `--no-default-features` and `--features=ffi`.
+    ///
+    /// Pass the feature arguments of the generation build, so the static
+    /// library exports every function that the extension calls.
+    pub fn cargo_feature_arguments(
+        mut self,
+        arguments: impl IntoIterator<Item = impl Into<String>>,
+    ) -> Self {
+        self.feature_arguments = arguments.into_iter().map(Into::into).collect();
         self
     }
 
@@ -117,10 +126,9 @@ impl RubyCExtHost {
             .unwrap_or_else(|| default_module(bindings.package().name()))
     }
 
+    /// The starter gemspec version: the Cargo package version without build
+    /// metadata, because RubyGems rejects `+`.
     fn gem_version<'a>(&'a self, bindings: &'a Bindings<Native>) -> &'a str {
-        if let Some(version) = self.version.as_deref() {
-            return version;
-        }
         let version = bindings.package().version().unwrap_or("0.1.0");
         version
             .split_once('+')
@@ -272,6 +280,7 @@ impl host::HostBackend for RubyCExtHost {
             module: &module,
             artifact: &artifact,
             crate_name: &crate_name,
+            feature_arguments: &self.feature_arguments,
         };
         let mut files = vec![extension::render(&stem, &module)?];
         files.extend(package.render()?);
@@ -342,13 +351,6 @@ mod tests {
     }
 
     #[test]
-    fn configured_gem_versions_override_cargo_versions() {
-        let bindings = bindings_with_version("", Some("1.2.3+ci"));
-        let host = RubyCExtHost::new().version(Some("2.0.rc1".to_owned()));
-        assert_eq!(host.gem_version(&bindings), "2.0.rc1");
-    }
-
-    #[test]
     fn multipart_package_names_share_one_extension_stem() {
         let mut serialized = serde_json::to_value(bindings("")).unwrap();
         serialized["package"]["name"] = serde_json::to_value(CanonicalName::new(vec![
@@ -415,12 +417,13 @@ mod tests {
     }
 
     #[test]
-    fn ruby_package_files_use_the_configured_gem_and_module() {
+    fn ruby_package_files_use_the_configured_gem_crate_and_module() {
         let host = RubyCExtHost::new()
             .gem_name("my-lib")
             .and_then(|host| host.module_name(Some("MyLib::Native")))
             .expect("valid gem and module")
-            .native_library("my_lib");
+            .native_library("my_lib")
+            .cargo_feature_arguments(["--no-default-features", "--features=ffi,chrono"]);
         let output = render(host, "");
 
         assert_eq!(

@@ -11,8 +11,9 @@ use boltffi_backend::target::kotlin::{
     KotlinApiStyle as BackendKotlinApiStyle, KotlinDesktopLoader as BackendKotlinDesktopLoader,
     KotlinFactoryStyle as BackendKotlinFactoryStyle,
 };
-use boltffi_backend::target::ruby::RubyCExtHost;
+use boltffi_backend::target::ruby::{RubyCExtHost, name_style::extension_stem};
 use boltffi_backend::{CoverageMode, GeneratedOutput};
+use boltffi_bindgen::cargo::LibraryCargoArgs;
 use boltffi_bindgen::generate::{Generation, GenerationError};
 use boltffi_bindgen::target::Target;
 use boltffi_binding::BindingMetadataSurface;
@@ -539,9 +540,11 @@ fn generate_ruby(config: &Config, options: &GenerateOptions) -> Result<()> {
 
 /// Writes the Ruby gem sources for one binding expansion.
 ///
-/// `pack ruby` passes the expansion that it builds the static library from.
-/// The extension then calls only functions that the library exports: Ruby
-/// resolves a missing function only at its first call, which crashes.
+/// `pack ruby` passes the expansion that it copies the crate source for.
+/// `extconf.rb` builds that crate with the feature arguments of the
+/// generation build, so the extension calls only functions that the static
+/// library exports. Ruby resolves a missing function only at its first call,
+/// which crashes.
 pub(crate) fn render_ruby(
     config: &Config,
     expansion: &BindingExpansion,
@@ -552,10 +555,11 @@ pub(crate) fn render_ruby(
     let ruby = &config.targets.ruby;
     let host = RubyCExtHost::new()
         .native_library(expansion.artifact_name())
-        .version(ruby.version.clone())
+        .cargo_feature_arguments(ruby_feature_arguments(expansion.cargo_args()))
         .gem_name(config.ruby_gem_name())
         .and_then(|host| host.module_name(ruby.module_name.as_deref()))
         .map_err(|error| generation_error(target.name(), GenerationError::Render(error)))?;
+    let extension_directory = Path::new("ext").join(extension_stem(config.ruby_gem_name()));
     expansion
         .generation()
         .coverage_mode(CoverageMode::Partial)
@@ -564,10 +568,59 @@ pub(crate) fn render_ruby(
         .map_err(|error| generation_error(target.name(), error))
         .and_then(|output| {
             print_coverage(target.name(), &output, deny_skipped)?;
+            let output = ruby_files_to_write(output, output_directory, &extension_directory);
             Generation::write_output(output, output_directory)
                 .map(drop)
                 .map_err(|error| generation_error(target.name(), error))
         })
+}
+
+/// Keeps the files that a Ruby generation writes.
+///
+/// BoltFFI owns the extension directory and rewrites it each time. The
+/// gemspec and the `lib/` entry file are starters: BoltFFI writes them only
+/// when they are missing, so the gem author owns them after that.
+fn ruby_files_to_write(
+    output: GeneratedOutput,
+    output_directory: &Path,
+    extension_directory: &Path,
+) -> GeneratedOutput {
+    let (files, diagnostics, coverage) = output.into_parts();
+    let files = files
+        .into_iter()
+        .filter(|file| {
+            let path = file.path().as_path();
+            path.starts_with(extension_directory) || !output_directory.join(path).exists()
+        })
+        .collect();
+    GeneratedOutput::new(files, diagnostics).with_coverage(coverage)
+}
+
+/// The Cargo feature arguments in `arguments`, each in one word.
+///
+/// `extconf.rb` builds the copied crate outside the original package
+/// selection, so it keeps only `--features`, `-F`, `--no-default-features`,
+/// and `--all-features`.
+fn ruby_feature_arguments(arguments: &LibraryCargoArgs) -> Vec<String> {
+    let mut arguments = arguments.iter();
+    let mut feature_arguments = Vec::new();
+    while let Some(argument) = arguments.next() {
+        let features = match argument.as_str() {
+            "--no-default-features" | "--all-features" => {
+                feature_arguments.push(argument.clone());
+                continue;
+            }
+            "--features" | "-F" => arguments.next().map(String::as_str),
+            _ => argument
+                .strip_prefix("--features=")
+                .or_else(|| argument.strip_prefix("-F="))
+                .or_else(|| argument.strip_prefix("-F")),
+        };
+        if let Some(features) = features {
+            feature_arguments.push(format!("--features={features}"));
+        }
+    }
+    feature_arguments
 }
 
 fn generate_kotlin(config: &Config, options: &GenerateOptions) -> Result<()> {
@@ -975,13 +1028,14 @@ fn target_label(target: &GenerateTarget) -> &'static str {
 mod tests {
     use super::{
         GenerateOptions, GenerateTarget, generation_cargo_args, prepare_kmp_output_directory,
-        run_generation, run_java_generations, write_kmp_output,
+        ruby_feature_arguments, run_generation, run_java_generations, write_kmp_output,
     };
     use crate::{
         cli::CliError,
         config::{Config, TargetSection},
     };
     use boltffi_backend::{FilePath, GeneratedFile, GeneratedOutput};
+    use boltffi_bindgen::cargo::LibraryCargoArgs;
     use boltffi_bindgen::generate::Generation;
     use std::fs;
     use std::path::PathBuf;
@@ -1390,5 +1444,42 @@ package = "com.boltffi.demo"
         if output_directory.exists() {
             fs::remove_dir_all(output_directory).expect("cleanup generated output");
         }
+    }
+
+    #[test]
+    fn ruby_feature_arguments_keep_every_feature_form_and_drop_other_arguments() {
+        let arguments = LibraryCargoArgs::parse(
+            [
+                "--package",
+                "demo",
+                "--features",
+                "ffi,serde",
+                "--features=async",
+                "-F",
+                "spaced",
+                "-Fjoined",
+                "-F=equals",
+                "--no-default-features",
+                "--frozen",
+                "--profile",
+                "dist",
+                "--all-features",
+            ]
+            .map(str::to_owned),
+        )
+        .unwrap();
+
+        assert_eq!(
+            ruby_feature_arguments(&arguments),
+            [
+                "--features=ffi,serde",
+                "--features=async",
+                "--features=spaced",
+                "--features=joined",
+                "--features=equals",
+                "--no-default-features",
+                "--all-features",
+            ]
+        );
     }
 }
