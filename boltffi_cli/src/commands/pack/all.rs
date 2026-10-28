@@ -28,6 +28,7 @@ pub(super) fn pack_all(
         options.experimental,
         "pack all",
     )?;
+    super::ensure_ruby_host_supported(config, options.experimental)?;
     let prepared_java_pack = config
         .should_process(Target::Java, options.experimental)
         .then(|| {

@@ -617,6 +617,8 @@ The generated gem requires Ruby 3.3 or later.
   - Default: `dist/ruby`
   - `generate ruby` writes `{output}/<gem>.gemspec`, `{output}/lib/<stem>.rb`, and
     the extension sources under `{output}/ext/<stem>/`.
+  - `generate ruby` and `pack ruby` first delete `{output}/ext/`, `{output}/lib/`,
+    and each `{output}/*.gemspec`.
   - `pack ruby` also copies the host static library and its link metadata into
     `{output}/ext/<stem>/`.
 - `gem_name` (string, optional): Gem name in RubyGems syntax.
@@ -634,9 +636,9 @@ The generated gem requires Ruby 3.3 or later.
 host, which must be macOS or Linux. The generated `extconf.rb` links the
 library that `pack ruby` copies, so run `pack ruby` before `gem build`.
 
-`pack ruby --no-build` builds nothing. It checks that the recorded digest of
-the extension C source matches the current source. Missing or invalid link
-metadata or a source mismatch causes an error.
+`pack ruby --no-build` builds nothing. It checks that an earlier `pack ruby`
+left the static library and its link metadata. A later `generate ruby` deletes
+both, so a missing library or invalid link metadata causes an error.
 
 ## Dart
 

@@ -537,11 +537,14 @@ fn generate_ruby(config: &Config, options: &GenerateOptions) -> Result<()> {
     render_ruby(config, &expansion, &output_directory, options.deny_skipped)
 }
 
-/// Writes the Ruby gem sources for one binding expansion.
+/// Replaces the Ruby gem sources with the sources for one binding expansion.
 ///
 /// `pack ruby` passes the expansion that it builds the static library from.
 /// The extension then calls only functions that the library exports: Ruby
 /// resolves a missing function only at its first call, which crashes.
+///
+/// The write first deletes `ext/`, `lib/`, and each gemspec in the output, so
+/// no library, extension, or gemspec from an earlier generation stays.
 pub(crate) fn render_ruby(
     config: &Config,
     expansion: &BindingExpansion,
@@ -552,7 +555,11 @@ pub(crate) fn render_ruby(
     let ruby = &config.targets.ruby;
     let host = RubyCExtHost::new()
         .native_library(expansion.artifact_name())
-        .version(ruby.version.clone())
+        .version(
+            ruby.version
+                .clone()
+                .or_else(|| config.package.version.clone()),
+        )
         .gem_name(config.ruby_gem_name())
         .and_then(|host| host.module_name(ruby.module_name.as_deref()))
         .map_err(|error| generation_error(target.name(), GenerationError::Render(error)))?;
@@ -564,10 +571,27 @@ pub(crate) fn render_ruby(
         .map_err(|error| generation_error(target.name(), error))
         .and_then(|output| {
             print_coverage(target.name(), &output, deny_skipped)?;
+            remove_stale_ruby_gem(output_directory)?;
             Generation::write_output(output, output_directory)
                 .map(drop)
                 .map_err(|error| generation_error(target.name(), error))
         })
+}
+
+fn remove_stale_ruby_gem(output_directory: &Path) -> Result<()> {
+    let gemspecs = fs::read_dir(output_directory)
+        .into_iter()
+        .flatten()
+        .filter_map(|entry| entry.ok().map(|entry| entry.path()))
+        .filter(|path| {
+            path.extension()
+                .is_some_and(|extension| extension == "gemspec")
+        });
+    ["ext", "lib"]
+        .into_iter()
+        .map(|directory| output_directory.join(directory))
+        .chain(gemspecs)
+        .try_for_each(remove_stale_generated_path)
 }
 
 fn generate_kotlin(config: &Config, options: &GenerateOptions) -> Result<()> {
@@ -975,7 +999,7 @@ fn target_label(target: &GenerateTarget) -> &'static str {
 mod tests {
     use super::{
         GenerateOptions, GenerateTarget, generation_cargo_args, prepare_kmp_output_directory,
-        run_generation, run_java_generations, write_kmp_output,
+        remove_stale_ruby_gem, run_generation, run_java_generations, write_kmp_output,
     };
     use crate::{
         cli::CliError,
@@ -988,6 +1012,26 @@ mod tests {
     use std::time::{SystemTime, UNIX_EPOCH};
 
     use crate::commands::generate::java::TargetGeneration;
+
+    #[test]
+    fn ruby_generation_removes_every_earlier_gem_file() {
+        let output = tempfile::tempdir().unwrap();
+        let root = output.path();
+        fs::create_dir_all(root.join("ext/old")).unwrap();
+        fs::create_dir_all(root.join("lib")).unwrap();
+        for stale in ["ext/old/libold.a", "lib/old.rb", "old.gemspec"] {
+            fs::write(root.join(stale), "").unwrap();
+        }
+        fs::write(root.join("README.md"), "").unwrap();
+
+        remove_stale_ruby_gem(root).unwrap();
+
+        let remaining: Vec<_> = fs::read_dir(root)
+            .unwrap()
+            .map(|entry| entry.unwrap().file_name())
+            .collect();
+        assert_eq!(remaining, ["README.md"]);
+    }
 
     fn parse_config(input: &str) -> Config {
         let parsed: Config = toml::from_str(input).expect("toml parse failed");

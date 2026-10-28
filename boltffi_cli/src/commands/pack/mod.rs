@@ -21,7 +21,7 @@ pub(crate) use crate::pack::java::{
 };
 pub(crate) use crate::pack::kmp::{ensure_kmp_no_build_supported, pack_kmp};
 pub(crate) use crate::pack::python::pack_python;
-pub(crate) use crate::pack::ruby::pack_ruby;
+pub(crate) use crate::pack::ruby::{ensure_ruby_host_supported, pack_ruby};
 pub(crate) use crate::pack::wasm::pack_wasm;
 
 pub fn run_pack(config: &Config, command: PackCommand, reporter: &Reporter) -> Result<()> {

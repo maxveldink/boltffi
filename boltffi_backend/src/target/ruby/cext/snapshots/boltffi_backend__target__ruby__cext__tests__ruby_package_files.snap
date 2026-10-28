@@ -31,7 +31,6 @@ require "my_lib/my_lib"
 # `boltffi pack ruby` puts in this directory. The `.boltffi-link.json` file
 # beside the library lists the system libraries the Rust standard library needs.
 
-require "digest"
 require "json"
 require "mkmf"
 require "shellwords"
@@ -47,7 +46,9 @@ module BoltFFIExtconf
       archive = File.join(__dir__, "lib#{ARTIFACT}.a")
       abort("boltffi: no static library for #{EXTENSION}; run boltffi pack ruby") unless File.exist?(archive)
 
-      metadata = link_metadata("#{archive}.boltffi-link.json")
+      metadata_path = "#{archive}.boltffi-link.json"
+      abort("boltffi: missing link metadata #{metadata_path}") unless File.exist?(metadata_path)
+      metadata = JSON.parse(File.read(metadata_path))
       $LOCAL_LIBS << " #{archive.shellescape}"
       metadata.fetch("native_link_search_paths", []).each do |entry|
         kind, path = entry.split("=", 2)
@@ -61,17 +62,6 @@ module BoltFFIExtconf
       $LIBS << " #{native.map(&:shellescape).join(" ")}"
       export_only_entry_point
       create_makefile("#{EXTENSION}/#{EXTENSION}")
-    end
-
-    # `boltffi pack ruby` records a digest of the extension source beside the
-    # library. A library packed for another source can lack a function that
-    # this source calls, and Ruby would crash at the first call.
-    def link_metadata(path)
-      abort("boltffi: missing link metadata #{path}") unless File.exist?(path)
-      metadata = JSON.parse(File.read(path))
-      source = Digest::SHA256.file(File.join(__dir__, "#{EXTENSION}.c")).hexdigest
-      abort("boltffi: #{path} belongs to other extension sources; run boltffi pack ruby again") unless metadata["source_sha256"] == source
-      metadata
     end
 
     def darwin?

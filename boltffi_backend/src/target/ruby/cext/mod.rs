@@ -95,7 +95,8 @@ impl RubyCExtHost {
     /// bridge writes its header beside the extension source.
     /// The header directory uses the same stem as the Ruby package files.
     pub fn into_target(self, bindings: &Bindings<Native>) -> Result<Target<Self, CBridge>> {
-        let header = format!("{}/boltffi.h", extension::directory(&self.stem(bindings)));
+        let stem = extension_stem(&self.gem(bindings));
+        let header = format!("{}/boltffi.h", extension::directory(&stem));
         Ok(Target::new(self, CBridge::new(header)?))
     }
 
@@ -104,10 +105,6 @@ impl RubyCExtHost {
         self.gem
             .clone()
             .unwrap_or_else(|| default_gem(bindings.package().name()))
-    }
-
-    fn stem(&self, bindings: &Bindings<Native>) -> String {
-        extension_stem(&self.gem(bindings))
     }
 
     fn module(&self, bindings: &Bindings<Native>) -> Result<ConstantPath> {
@@ -257,7 +254,7 @@ impl host::HostBackend for RubyCExtHost {
         _declarations: Vec<RenderedDeclaration<'decl, Self::Surface>>,
     ) -> Result<GeneratedOutput> {
         let gem = self.gem(bindings);
-        let stem = self.stem(bindings);
+        let stem = extension_stem(&gem);
         let module = self.module(bindings)?;
         let artifact = self
             .library
